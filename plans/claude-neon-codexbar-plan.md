@@ -156,7 +156,7 @@ Note: no `secrets.py`, no `providers/` directory. Provider logic lives in CodexB
 ## 6. Prerequisites
 
 - KDE Plasma 6, Wayland session (X11 should also work)
-- Python 3.10+, pip, python3-venv
+- Python >=3.11, pip, python3-venv
 - `kpackagetool6`, `systemd --user`, `curl`, `tar`
 - 64-bit x86_64 or aarch64 Linux
 
@@ -337,7 +337,7 @@ WantedBy=default.target
 - Install: `pip install --user .`.
 
 ### 12.3 Combined installer (`packaging/install.sh`)
-1. Verify Plasma 6 + Python 3.10+.
+1. Verify Plasma 6 + Python >=3.11.
 2. `pip install --user .`
 3. `neon-codexbar install-runtime` (codexbar binary).
 4. `kpackagetool6 -t Plasma/Applet -i plasmoid/`

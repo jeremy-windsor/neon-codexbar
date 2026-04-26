@@ -7,12 +7,18 @@ editable install first.
 
 from __future__ import annotations
 
+import runpy
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
 _SRC_PACKAGE = Path(__file__).resolve().parents[1] / "src" / "neon_codexbar"
 if _SRC_PACKAGE.is_dir():
     __path__.insert(0, str(_SRC_PACKAGE))  # type: ignore[name-defined]
-
-__version__ = "0.1.0"
+    __version__ = str(runpy.run_path(str(_SRC_PACKAGE / "__init__.py"))["__version__"])
+else:
+    try:
+        __version__ = version("neon-codexbar")
+    except PackageNotFoundError:
+        __version__ = "unknown"
 
 __all__ = ["__version__"]

@@ -93,7 +93,7 @@ Suggested wording:
 
 1. **Installer/bootstrap**
    - checks Plasma 6 / KDE Neon prerequisites
-   - checks Python 3.10+
+   - checks Python >=3.11
    - checks/installs `codexbar` CLI without clobbering user-managed binaries
    - installs Python daemon
    - installs Plasma widget

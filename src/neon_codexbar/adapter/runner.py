@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import json
 import shutil
 import subprocess
 import time
 from collections.abc import Sequence
+from dataclasses import replace
 from pathlib import Path
 
 from neon_codexbar.config import AppConfig
@@ -134,18 +136,35 @@ class CodexBarRunner:
         """Return known config dump command forms in preferred order."""
 
         return [
-            ["config", "dump", "--pretty"],
             ["config", "dump", "--format", "json"],
+            ["config", "dump", "--pretty"],
             ["config", "dump"],
         ]
 
+    @staticmethod
+    def _with_json_parse_error(result: CommandResult, exc: json.JSONDecodeError) -> CommandResult:
+        """Return a result annotated with a config-dump JSON parse diagnostic."""
+
+        message = (
+            "CodexBar config dump was not valid JSON "
+            f"for {' '.join(result.command)}: {exc.msg} "
+            f"(line {exc.lineno}, column {exc.colno})."
+        )
+        stderr = "\n".join(part for part in (result.stderr.strip(), message) if part)
+        return replace(result, stderr=stderr, error=message)
+
     def config_dump(self) -> CommandResult:
-        """Run the first working known CodexBar config dump command form."""
+        """Run the first known config dump command form that emits valid JSON."""
 
         last_result: CommandResult | None = None
         for args in self.config_dump_candidates():
             result = self.run(args)
             if result.ok and result.stdout.strip():
+                try:
+                    json.loads(result.stdout)
+                except json.JSONDecodeError as exc:
+                    last_result = self._with_json_parse_error(result, exc)
+                    continue
                 return result
             last_result = result
             if result.exit_code == 127:
@@ -183,6 +202,5 @@ class CodexBarRunner:
                 source,
                 "--format",
                 "json",
-                "--pretty",
             ]
         )

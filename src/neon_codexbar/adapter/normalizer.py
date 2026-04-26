@@ -24,6 +24,10 @@ DISPLAY_NAMES: dict[str, str] = {
 
 _WINDOW_KEYS = ("primary", "secondary", "tertiary")
 
+# OpenRouter exposes credit balance as loginMethod (for example, "Balance: $74.50").
+# That string is useful as a login method, but it is not a subscription plan name.
+_NON_PLAN_LOGIN_PREFIXES = ("balance:",)
+
 
 def _as_dict(value: Any) -> JsonDict:
     return value if isinstance(value, dict) else {}
@@ -271,7 +275,7 @@ def normalize_payload(
     )
     plan = (
         login_method
-        if login_method and not login_method.lower().startswith("balance:")
+        if login_method and not login_method.lower().startswith(_NON_PLAN_LOGIN_PREFIXES)
         else None
     )
 
