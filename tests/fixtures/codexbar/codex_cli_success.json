@@ -1,0 +1,39 @@
+[
+  {
+    "provider": "codex",
+    "account": "user@example.com",
+    "version": "1.2.3",
+    "source": "cli",
+    "status": null,
+    "usage": {
+      "primary": {
+        "usedPercent": 12,
+        "windowMinutes": 300,
+        "resetsAt": null,
+        "resetDescription": "today at 3:00 PM"
+      },
+      "secondary": {
+        "usedPercent": 25,
+        "windowMinutes": 10080,
+        "resetsAt": null,
+        "resetDescription": "Fri at 9:00 AM"
+      },
+      "tertiary": null,
+      "updatedAt": "2026-04-26T20:41:00Z",
+      "identity": {
+        "providerID": "codex",
+        "accountEmail": "user@example.com",
+        "accountOrganization": null,
+        "loginMethod": "pro"
+      }
+    },
+    "credits": {
+      "remaining": 42,
+      "events": [],
+      "updatedAt": "2026-04-26T20:41:00Z"
+    },
+    "antigravityPlanInfo": null,
+    "openaiDashboard": null,
+    "error": null
+  }
+]

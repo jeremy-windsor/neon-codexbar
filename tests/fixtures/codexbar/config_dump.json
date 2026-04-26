@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "providers": [
+    {
+      "id": "codex",
+      "enabled": true,
+      "source": "cli"
+    },
+    {
+      "id": "claude",
+      "enabled": true,
+      "source": "cli"
+    },
+    {
+      "id": "zai",
+      "enabled": true,
+      "source": "api"
+    },
+    {
+      "id": "openrouter",
+      "enabled": true,
+      "source": "api"
+    },
+    {
+      "id": "unknown-provider",
+      "enabled": true,
+      "source": "auto"
+    }
+  ]
+}

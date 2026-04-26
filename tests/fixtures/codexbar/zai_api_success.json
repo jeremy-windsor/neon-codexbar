@@ -1,0 +1,40 @@
+[
+  {
+    "provider": "zai",
+    "account": null,
+    "version": null,
+    "source": "api",
+    "status": null,
+    "usage": {
+      "primary": {
+        "usedPercent": 40,
+        "windowMinutes": 10080,
+        "resetsAt": "2026-05-03T20:41:00Z",
+        "resetDescription": null
+      },
+      "secondary": {
+        "usedPercent": 10,
+        "windowMinutes": 1,
+        "resetsAt": "2026-04-26T20:42:00Z",
+        "resetDescription": null
+      },
+      "tertiary": {
+        "usedPercent": 65,
+        "windowMinutes": 300,
+        "resetsAt": "2026-04-27T01:41:00Z",
+        "resetDescription": null
+      },
+      "updatedAt": "2026-04-26T20:41:00Z",
+      "identity": {
+        "providerID": "zai",
+        "accountEmail": null,
+        "accountOrganization": null,
+        "loginMethod": null
+      }
+    },
+    "credits": null,
+    "antigravityPlanInfo": null,
+    "openaiDashboard": null,
+    "error": null
+  }
+]
