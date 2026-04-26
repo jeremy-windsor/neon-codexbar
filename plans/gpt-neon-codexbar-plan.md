@@ -1,4 +1,4 @@
-# neon-codexbar Plan — GPT Review
+# neon-codexbar Plan — GPT Review v2
 
 Date: 2026-04-26
 Author: Will / GPT review
@@ -6,18 +6,20 @@ Repo: `jeremy-windsor/neon-codexbar`
 
 ## Executive read
 
-Build `neon-codexbar` as a KDE Neon / Plasma frontend for upstream `codexbar` CLI.
+Build `neon-codexbar` as a KDE Neon / Plasma frontend powered by upstream `codexbar` CLI.
 
-Do **not** rebuild provider auth, quota endpoints, cookies, API parsing, or provider-specific logic inside the KDE app. That work belongs in upstream CodexBar or a maintained CodexBar fork. `neon-codexbar` should be the Linux/KDE shell: install, configure, run, render, diagnose.
+The revised Claude plan is now mostly right: it adopted the correct architectural line and turned into a useful implementation spec. This document keeps that stronger structure, adds the fixes I want before implementation, and preserves the non-negotiable rule:
 
-The clean split:
+> **CodexBar owns providers. neon-codexbar owns KDE UX.**
+
+No provider auth/parsing swamp in Python. No second secrets store. No QML subprocess goblin circus.
 
 ```text
 CodexBar / CodexBarCore
   owns providers, config, auth, fetch strategies, parsing, CLI JSON
 
 neon-codexbar
-  owns KDE widget/systray UX, install flow, source policy, rendering, diagnostics
+  owns KDE widget/systray UX, install flow, Linux source policy, rendering, diagnostics
 ```
 
 ## What we know already
@@ -28,31 +30,48 @@ Tested on KDE Neon / Jeremy's laptop:
 - `codexbar --provider claude --source cli --format json --pretty` works.
 - z.ai works through CodexBar CLI with API key/env and `--source api`.
 - OpenRouter works through CodexBar CLI with API source and returns balance/credit usage.
-- `jjlinares/codexbar-kde-widget` already proves a pure QML Plasma widget can call CodexBar CLI and render providers.
-- `radoslavchobanov/PlasmaCodexBar` proves another KDE widget direction works, but it reimplements provider logic in Python, which is the wrong long-term shape.
+- `jjlinares/codexbar-kde-widget` proves a pure QML Plasma widget can call CodexBar CLI and render providers.
+- `radoslavchobanov/PlasmaCodexBar` proves another KDE widget direction works, but its original provider approach reimplemented provider logic in Python, which we should not copy.
+- Linux `--source auto` is unsafe/noisy. Many providers fall into macOS/web-only paths unless we force source policy.
 
-## Recommended product shape
+## Product shape
 
-`neon-codexbar` should feel like its own app to the user while using CodexBar internally as the provider engine.
+`neon-codexbar` should feel like its own KDE app while using CodexBar internally as the provider engine.
 
 User-facing:
 
-- KDE/Plasma widget and/or systray app named `neon-codexbar`
-- simple setup flow
+- KDE/Plasma widget first
+- optional systray app later
 - provider cards
 - quota windows
 - balances/credits
-- clear setup errors
+- stale/error/setup states
+- diagnostics that do not leak secrets
 - no need for users to understand CodexBar unless troubleshooting or reading docs
 
 Implementation reality:
 
-- bundle or install upstream `codexbar` CLI
-- keep config/secrets in CodexBar's supported locations
-- call CodexBar CLI for all provider data
-- document CodexBar license and attribution clearly
+- install or locate `codexbar` CLI
+- keep provider config/secrets in CodexBar-supported locations
+- daemon calls CodexBar CLI for all provider data
+- widget reads normalized snapshots
+- docs disclose CodexBar dependency/license/attribution
 
-## Transparency and licensing
+## Widget first, systray later
+
+The app should target a **Plasma widget first**.
+
+Reason: existing proof points are Plasma widgets, and KDE users expect panel widgets. A systray-only app is acceptable later, but it adds another UX/packaging surface before the core problem is solved.
+
+Phase order:
+
+1. Plasma widget + daemon + snapshot file
+2. optional app menu entry for diagnostics/settings
+3. optional real systray mode if panel widget limitations become annoying
+
+Do not build both widget and systray in v0.1 unless the implementation is trivial. It will not be trivial. Nothing involving QML ever is. QML is JavaScript wearing a trench coat.
+
+## Licensing and transparency
 
 It is fine for the UX to present as `neon-codexbar`, but it must not pretend provider functionality is original.
 
@@ -62,6 +81,7 @@ Required:
 - document that provider data is powered by CodexBar CLI
 - link upstream: `https://github.com/steipete/CodexBar`
 - document which parts are ours vs upstream
+- About dialog must include CodexBar attribution
 
 Suggested wording:
 
@@ -72,10 +92,13 @@ Suggested wording:
 ### Components
 
 1. **Installer/bootstrap**
-   - installs/checks `codexbar` CLI
+   - checks Plasma 6 / KDE Neon prerequisites
+   - checks Python 3.10+
+   - checks/installs `codexbar` CLI without clobbering user-managed binaries
+   - installs Python daemon
    - installs Plasma widget
-   - optionally installs systray/autostart component later
-   - verifies CLI works
+   - installs optional systemd user service
+   - verifies a one-shot fetch works
 
 2. **CodexBar adapter layer**
    - single abstraction around CLI calls
@@ -83,95 +106,439 @@ Suggested wording:
    - enforces Linux-safe source policy
    - parses JSON
    - normalizes data into UI blocks
-   - captures diagnostics without secrets
+   - redacts diagnostics
+   - pins/validates known CLI version behavior
 
-3. **Provider source policy**
-   - avoids bad Linux defaults like blind `auto`
-   - maps providers to working source modes
+3. **Backend daemon**
+   - Python service under `systemd --user`
+   - runs all CodexBar subprocess calls
+   - writes atomic `snapshot.json`
+   - handles refresh/backoff/stale state
+   - exposes one-shot CLI commands for debugging
 
-   Initial policy:
+4. **Plasma widget**
+   - QML-only display layer
+   - never spawns provider subprocesses
+   - reads snapshot file
+   - renders cards dynamically
+   - manual refresh signal to daemon via sentinel file or lightweight command
 
-   | Provider | Preferred Linux source | Status |
-   |---|---|---|
-   | codex | `cli` | tested working |
-   | claude | `cli` | tested working |
-   | zai | `api` | tested working |
-   | openrouter | `api` | tested working |
-   | gemini | `api` / provider default | needs Gemini auth test |
-   | copilot | `api` | needs token/device flow test |
-   | kilo | `api` or CLI fallback | needs Kilo auth test |
-   | opencode | likely web/manual-cookie limited | needs Linux test |
+5. **Docs/diagnostics**
+   - installation
+   - CodexBar setup
+   - provider enablement
+   - source policy
+   - troubleshooting
+   - redacted diagnostic bundle
 
-4. **UI renderer**
-   - renders generic data blocks, not hardcoded provider assumptions
-   - supports quota windows: primary / secondary / tertiary
-   - supports credit/balance meters like OpenRouter
-   - supports provider errors/setup hints
-   - supports stale/cache state
+## Repository layout
 
-5. **Settings/diagnostics**
-   - refresh interval
-   - warning/critical thresholds
-   - CLI path
-   - provider display mode: enabled-only / all configured / debug all
-   - validate CodexBar config
-   - copy diagnostics with secrets redacted
+Use Claude's revised layout as the base, with one clarification: docs should explicitly separate architecture from CodexBar provider policy.
+
+```text
+neon-codexbar/
+├── README.md
+├── LICENSE
+├── NOTICE
+├── pyproject.toml
+├── docs/
+│   ├── ARCHITECTURE.md
+│   ├── CODEXBAR_RUNTIME.md
+│   ├── SOURCE_POLICY.md
+│   ├── PROVIDERS.md
+│   ├── ATTRIBUTION.md
+│   └── TROUBLESHOOTING.md
+├── packaging/
+│   ├── install.sh
+│   ├── uninstall.sh
+│   └── neon-codexbar.service
+├── plasmoid/
+│   ├── metadata.json
+│   └── contents/
+│       ├── ui/
+│       │   ├── main.qml
+│       │   ├── CompactRepresentation.qml
+│       │   ├── FullRepresentation.qml
+│       │   ├── ProviderCard.qml
+│       │   ├── QuotaWindowBar.qml
+│       │   ├── CreditMeter.qml
+│       │   └── ConfigGeneral.qml
+│       └── config/
+│           ├── main.xml
+│           └── config.qml
+├── src/
+│   └── neon_codexbar/
+│       ├── adapter/
+│       │   ├── installer.py
+│       │   ├── runner.py
+│       │   ├── discovery.py
+│       │   ├── source_policy.py
+│       │   └── normalizer.py
+│       ├── daemon.py
+│       ├── models.py
+│       ├── config.py
+│       ├── diagnostics.py
+│       └── cli.py
+└── tests/
+    ├── fixtures/
+    ├── unit/
+    └── integration/
+```
+
+## CodexBar adapter layer
+
+### Binary management
+
+Find `codexbar` in this order:
+
+1. explicit path in neon config
+2. PATH
+3. `~/.local/bin/codexbar`
+4. installer-managed runtime path
+
+Rules:
+
+- Do not silently overwrite an existing user-managed `codexbar`.
+- If version mismatch exists, warn and offer installer-managed runtime.
+- If downloading a binary, verify SHA-256.
+- Keep the pinned target version in repo, e.g. `vendor/codexbar/version.txt` and `vendor/codexbar/checksums.json`.
+- `neon-codexbar --version` must print both neon-codexbar and codexbar versions.
+
+### Invocation contract
+
+Every provider fetch must go through one function, roughly:
+
+```python
+fetch_provider(provider_id: str, source: str, timeout: int = 10) -> RawProviderResult
+```
+
+Rules:
+
+- always pass `--provider <id>`
+- always pass explicit `--source <source>`
+- always request JSON output
+- never rely on Linux `--source auto`
+- capture stdout/stderr/exit code
+- redact anything that looks like a token/key before diagnostics
+- do not surface raw stderr directly in the widget
+
+Important: verify exact CodexBar CLI flags during Phase 1 before hardcoding docs.
+
+Known working examples from testing:
+
+```bash
+codexbar --provider codex --source cli --format json --pretty
+codexbar --provider claude --source cli --format json --pretty
+codexbar --provider zai --source api --format json --pretty
+codexbar --provider openrouter --source api --format json --pretty
+codexbar config dump --pretty
+```
+
+Do **not** assume `codexbar config dump --format json` exists until tested. Claude's plan used that form; we need to verify it. If `--pretty` is the actual stable JSON command, use that.
+
+### Provider discovery
+
+Discovery uses CodexBar config output.
+
+Desired behavior:
+
+- read all provider IDs known to CodexBar
+- know whether each provider is enabled
+- filter based on neon config display mode
+- skip unknown providers unless source policy has an entry
+- show skipped/unknown providers in diagnostics, not the main UI
+
+Display modes:
+
+- `enabled-only` default
+- `all-configured`
+- `debug-all`
+
+### Linux source policy
+
+Initial table:
+
+| Provider | Linux source | Status |
+|---|---|---|
+| codex | `cli` | tested working |
+| claude | `cli` | tested working |
+| zai | `api` | tested working |
+| openrouter | `api` | tested working |
+| kimik2 | `api` | needs token test |
+| gemini | likely `api` or CLI-backed source | needs auth test |
+| copilot | likely `api` | needs token/device-flow test |
+| kilo | `api` or CLI fallback | needs auth test |
+| opencode | unknown/problematic | likely needs upstream Linux support/manual flow |
+
+Unknown providers default to:
+
+```text
+skip + diagnostic note
+```
+
+Not:
+
+```text
+guess source + spam failing subprocesses
+```
+
+Because we are building software, not a smoke machine.
+
+## Configuration and secrets
+
+### Our config: UI only
+
+`~/.config/neon-codexbar/config.json`:
+
+```json
+{
+  "version": 1,
+  "codexbar_path": null,
+  "refresh_interval_seconds": 300,
+  "warning_threshold_percent": 70,
+  "critical_threshold_percent": 90,
+  "provider_display_mode": "enabled-only",
+  "provider_overrides": {
+    "zai": { "display_name": "Z.ai (GLM)" }
+  }
+}
+```
+
+No secrets here.
+
+### Provider secrets: CodexBar only
+
+Provider keys/auth live in places CodexBar already reads:
+
+- `~/.codexbar/config.json`
+- provider CLI auth files like `~/.codex`, Claude CLI auth, etc.
+- CodexBar-supported env vars such as:
+  - `Z_AI_API_KEY`
+  - `OPENROUTER_API_KEY`
+
+`neon-codexbar` must not invent its own provider key names or secret file.
+
+### Systemd user env gotcha
+
+This is the big fix Claude's plan needs called out clearly.
+
+A `systemd --user` daemon may not inherit shell env vars. That means `Z_AI_API_KEY` and `OPENROUTER_API_KEY` might work in a terminal but fail in the daemon.
+
+Preferred order:
+
+1. Put long-lived provider keys in CodexBar config if CodexBar supports it.
+2. If using env vars, installer/docs must explain importing them into the user manager:
+
+```bash
+systemctl --user import-environment Z_AI_API_KEY OPENROUTER_API_KEY
+systemctl --user restart neon-codexbar.service
+```
+
+3. Optional later: support an env file loaded by the **systemd unit only**, not parsed/stored by the app as a secret manager.
+
+If we add env-file support, it should be explicit, documented, mode `0600`, and still use CodexBar's env var names. No parallel secret schema.
 
 ## Data model strategy
 
 Do not hardcode `primary = Session` and `secondary = Weekly`.
 
-CodexBar providers do not all share the same meaning:
+Providers differ:
 
-- Codex: primary is session, secondary is weekly
-- Claude: primary is session, secondary is weekly
-- z.ai: primary/secondary/tertiary can represent different quota windows
-- OpenRouter: no primary/secondary windows; exposes balance/usage credits
+- Codex: primary/secondary look like session/weekly
+- Claude: primary/secondary look like session/weekly
+- z.ai: primary/secondary/tertiary can be 1-week / 1-minute / 5-hour windows
+- OpenRouter: no quota windows; returns balance/credits/usage
 
-Normalize into display blocks:
+Normalize into generic display blocks:
 
-```text
-ProviderCard
-  identity/plan/source/version
-  quota windows[]
-  credit meters[]
-  model usage[]
-  errors[]
-  status
+```python
+@dataclass
+class QuotaWindow:
+    id: str | None
+    used_percent: float | None
+    resets_at: datetime | None
+    reset_description: str | None
+    window_label: str | None
+    window_minutes: int | None
+    raw: dict
+
+@dataclass
+class CreditMeter:
+    label: str
+    balance: float | None
+    used: float | None
+    total: float | None
+    used_percent: float | None
+    currency: str | None
+    raw: dict
+
+@dataclass
+class ProviderCard:
+    provider_id: str
+    display_name: str
+    source: str
+    version: str | None
+    identity: dict
+    plan: str | None
+    login_method: str | None
+    quota_windows: list[QuotaWindow]
+    credit_meters: list[CreditMeter]
+    model_usage: list[dict]
+    error_message: str | None
+    setup_hint: str | None
+    is_stale: bool
+    last_success: datetime | None
+    last_attempt: datetime
 ```
 
-This keeps the UI future-proof when CodexBar adds providers or changes provider-specific fields.
+Renderer rules:
 
-## Build vs fork decision
+- draw all quota windows in returned order
+- use CodexBar-provided labels when available
+- fallback label: `Window 1`, `Window 2`, etc.
+- draw credit meters when quota windows are absent or when provider exposes both
+- show setup/error card for explicitly enabled providers that fail
+- never hide enabled provider failures silently
 
-### Use existing widget designs as references
+## OpenRouter display rule
 
-Use these repos as reference material:
+OpenRouter currently returns credit/balance usage rather than primary/secondary/tertiary windows.
 
-- `jjlinares/codexbar-kde-widget`
-  - best architecture reference: pure QML + CodexBar CLI
-  - useful install flow, QML structure, provider cards/icons
+Display should show:
 
-- `radoslavchobanov/PlasmaCodexBar`
-  - good KDE Neon proof and UI reference
-  - wrong provider strategy because it reimplements providers in Python
+- balance
+- total credits
+- total usage
+- used percent
+- rate limit if present
+- key status if present
 
-### Build our own repo
+No fake quota bars. If there is no quota window, don't invent one. This is basic dignity.
 
-Since `neon-codexbar` is a new app/repo, use the above as patterns, not necessarily as direct upstream forks.
+## z.ai display rule
 
-Best path:
+z.ai may return primary/secondary/tertiary windows. Display all of them dynamically.
 
-1. start with a minimal pure QML Plasma widget scaffold
-2. borrow/recreate useful structure from `jjlinares/codexbar-kde-widget`
-3. implement a clean CodexBar adapter layer immediately
-4. avoid copying stale provider assumptions
+Do not label them Session/Weekly unless CodexBar itself provides those exact labels.
+
+## Daemon model
+
+Use Claude's daemon approach, with conservative defaults.
+
+### Lifecycle
+
+- `systemd --user` service
+- logs to journald
+- one-shot CLI mode for debugging
+- graceful reload/refresh
+
+### Refresh loop
+
+Every refresh interval:
+
+1. discover enabled providers
+2. apply Linux source policy
+3. fetch providers with bounded concurrency
+4. normalize results
+5. atomic-write snapshot file
+6. update stale/error state
+
+Concurrency:
+
+- start with max 4 concurrent provider calls
+- not 8 until we have evidence it is harmless
+- per-provider timeout: 10s
+- retry/backoff on repeated failures
+- no tight loops
+
+Backoff:
+
+- first failure: retry next normal interval
+- repeated failures: exponential-ish backoff capped at 15 minutes
+- manual refresh overrides backoff once
+
+### Snapshot IPC
+
+Use atomic JSON file:
+
+```text
+~/.cache/neon-codexbar/snapshot.json
+```
+
+Write pattern:
+
+```text
+snapshot.json.tmp -> fsync -> rename snapshot.json
+```
+
+Widget reads only `snapshot.json`.
+
+Open question: verify Plasma 6 file watching. If unreliable, fallback to polling every 5 seconds.
+
+## Plasma widget
+
+QML components:
+
+- `CompactRepresentation.qml`
+  - panel icon
+  - color ring based on worst visible usage
+  - stale/error indicator
+
+- `FullRepresentation.qml`
+  - refresh button
+  - provider card list
+  - settings/diagnostics entry
+
+- `ProviderCard.qml`
+  - provider icon/name/source
+  - identity/plan/login method where safe
+  - quota windows
+  - credit meters
+  - setup/error hints
+
+- `QuotaWindowBar.qml`
+- `CreditMeter.qml`
+- `ConfigGeneral.qml`
+
+Widget rules:
+
+- no provider subprocesses
+- no secret handling
+- no provider-specific API calls
+- no hardcoded primary/secondary semantics
+- use theme colors
+- test light + dark themes
+
+## CLI surface
+
+Provide one app CLI for users and implementation agents:
+
+```bash
+neon-codexbar --version
+neon-codexbar config show
+neon-codexbar config set <key> <value>
+neon-codexbar discover
+neon-codexbar fetch --json
+neon-codexbar diagnose
+neon-codexbar install-runtime
+neon-codexbar refresh
+```
+
+`diagnose` must redact:
+
+- API keys
+- bearer tokens
+- cookies
+- auth headers
+- email can be optionally redacted with `--redact-identity`
+
+Default diagnostic output should be safe to paste into GitHub issues.
 
 ## Provider extension strategy
 
 When a provider is missing or broken:
 
-1. Add/fix provider in CodexBar using `docs/provider.md`:
+1. Add/fix provider in CodexBar using upstream `docs/provider.md`:
    - descriptor
    - fetch strategy
    - parser/fetcher
@@ -185,125 +552,179 @@ codexbar --provider <id> --source <source> --format json --pretty
 ```
 
 3. Update `neon-codexbar` only for:
-   - icon/name/dashboard metadata
+   - icon/name/dashboard metadata if needed
    - source policy
    - display mapping if a new output shape appears
 
-Rule: provider auth/parsing should not live in `neon-codexbar` except as a short-lived experiment.
+Rule: provider auth/parsing does not live in `neon-codexbar`.
 
-## Configuration and secrets
-
-Keys/config stay with CodexBar.
-
-Preferred sources:
-
-- `~/.codexbar/config.json`
-- provider CLI auth files (`~/.codex`, Claude CLI auth, etc.)
-- environment variables supported by CodexBar, e.g.:
-  - `Z_AI_API_KEY`
-  - `OPENROUTER_API_KEY`
-
-`neon-codexbar` should not store provider secrets.
-
-If KDE session environment becomes painful, consider a local env-file loader later, but treat that as a convenience wrapper around CodexBar-supported environment variables, not a new secret store.
+Exception: a temporary local proof-of-concept may be allowed only if it is explicitly marked disposable and deleted/replaced by CodexBar work before release.
 
 ## MVP scope
 
-MVP should include:
+MVP includes:
 
 - Plasma 6 widget
+- Python daemon
 - CodexBar CLI install/check
-- provider discovery from `codexbar config dump`
+- provider discovery from CodexBar config dump
 - Linux-safe source policy
-- provider cards for tested providers
+- provider cards for tested providers:
+  - Codex
+  - Claude
+  - z.ai
+  - OpenRouter
 - generic quota window rendering
 - OpenRouter-style balance/credit rendering
 - errors/setup hints for enabled providers
-- refresh/backoff
+- refresh/backoff/stale state
 - basic settings
 - license/attribution docs
+- redacted diagnostics
 
-MVP should not include:
+MVP does **not** include:
 
 - rewriting provider fetchers
-- storing API keys in the widget
+- storing API keys in widget/app config
 - browser cookie import
 - KWallet/libsecret integration
 - full settings UI for every provider
-- Flatpak/AppImage packaging before the widget behavior is proven
+- Flatpak/AppImage packaging
+- macOS/Windows support
+- systray mode unless it falls out naturally
+
+## Implementation phases
+
+### Phase 0 — validate CodexBar commands
+
+Before writing architecture into code, test the actual CLI surface on KDE Neon:
+
+```bash
+codexbar --version
+codexbar config dump --pretty
+codexbar config dump --format json   # verify if valid; do not assume
+codexbar --provider codex --source cli --format json --pretty
+codexbar --provider claude --source cli --format json --pretty
+codexbar --provider zai --source api --format json --pretty
+codexbar --provider openrouter --source api --format json --pretty
+```
+
+Acceptance:
+
+- exact command forms documented
+- fixtures saved under `tests/fixtures/`
+- source policy matches tested behavior
+
+### Phase 1 — scaffold + adapter proof
+
+- create Python package and CLI
+- implement CodexBar binary lookup
+- implement runner
+- implement hardcoded source policy for four tested providers
+- implement one-shot `neon-codexbar fetch --json`
+
+Acceptance:
+
+- one command fetches Codex, Claude, z.ai, OpenRouter and emits normalized JSON
+- no QML yet
+
+### Phase 2 — daemon + snapshot IPC
+
+- systemd user service
+- refresh loop
+- bounded concurrency
+- atomic snapshot writer
+- stale/error state
+- manual refresh trigger
+
+Acceptance:
+
+- daemon writes valid snapshot
+- survives provider failure
+- no secrets in logs
+
+### Phase 3 — Plasma widget v1
+
+- package installs with `kpackagetool6`
+- widget reads snapshot
+- provider cards render dynamically
+- quota windows and credit meters display correctly
+- manual refresh button works
+
+Acceptance:
+
+- Codex/Claude render normal windows
+- z.ai renders all returned windows
+- OpenRouter renders balance/credits without fake quota windows
+
+### Phase 4 — discovery + diagnostics
+
+- use CodexBar config dump for provider discovery
+- support display modes
+- unknown providers skip with diagnostic note
+- implement redacted `diagnose`
+
+Acceptance:
+
+- enabled providers appear automatically if source policy exists
+- failed enabled providers show setup/error card
+- diagnostics are safe to paste
+
+### Phase 5 — UX polish
+
+- settings UI
+- icons/metadata
+- theme cleanup
+- README screenshots
+- About dialog attribution
+- optional notifications
+
+Acceptance:
+
+- non-developer can install/use on KDE Neon without reading source code
+
+### Phase 6 — packaging/distribution
+
+- idempotent install/uninstall
+- KDE Neon clean VM test
+- tag v0.1.0
+
+Acceptance:
+
+- clean VM to working panel widget using documented install path
 
 ## Pros of this approach
 
-- Fast path to working KDE app.
 - Provider logic stays where it belongs.
-- Upstream CodexBar improvements flow into `neon-codexbar`.
-- Lower maintenance burden.
-- Easier to add providers correctly.
-- Cleaner licensing/attribution story.
+- KDE app remains maintainable.
+- CodexBar provider additions flow into neon-codexbar.
+- Secrets stay in one system.
+- QML stays mostly dumb.
+- Python daemon gives us testable logic and safe subprocess handling.
 
 ## Cons / risks
 
-- Depends on CodexBar CLI JSON stability.
-- Linux source behavior is uneven; `auto` often chooses macOS/web paths.
-- Web-cookie providers may remain limited until CodexBar supports Linux-safe/manual flows.
-- QML can get ugly if business logic leaks into UI files.
-- If we need provider changes upstream quickly, we may need to maintain a CodexBar fork or contribute PRs.
+| Risk | Mitigation |
+|---|---|
+| CodexBar CLI JSON changes | pin version; adapter owns parsing; fixture tests |
+| `config dump` flags/schema differ | Phase 0 validation before implementation |
+| systemd daemon misses env vars | prefer CodexBar config; document `systemctl --user import-environment`; optional env file later |
+| unknown provider discovered | skip unless source policy exists; show diagnostic note |
+| file watcher unreliable | fallback polling |
+| provider API rate limits | bounded concurrency + backoff |
+| user has their own codexbar binary | do not overwrite; warn and allow explicit path/runtime install |
+| upstream CodexBar lacks Linux support | fix/provider PR upstream or maintained CodexBar fork, not Python plugin swamp |
 
-## Recommended implementation phases
+## Recommended decision
 
-### Phase 1 — scaffold and proof
+Use the revised Claude plan as the implementation skeleton, but apply these corrections:
 
-- Create minimal Plasma 6 widget.
-- Add installer/check for `codexbar` CLI.
-- Call known-good providers:
-  - Codex CLI
-  - Claude CLI
-  - z.ai API
-  - OpenRouter API
+1. **Widget-first**, systray later.
+2. **Phase 0 CLI validation** before coding assumptions.
+3. **Systemd env handling** documented and tested.
+4. **Non-destructive CodexBar binary management**.
+5. **Bounded refresh/backoff** from day one.
+6. **No provider auth/parsing in neon-codexbar**.
+7. **No local provider secrets store**.
 
-Acceptance: widget renders all four from real CLI output.
-
-### Phase 2 — adapter cleanup
-
-- Create clean adapter module.
-- Add Linux source policy table.
-- Add `codexbar config dump` provider discovery.
-- Add redacted diagnostics.
-
-Acceptance: no provider command construction scattered through QML cards.
-
-### Phase 3 — generic renderer
-
-- Render quota windows dynamically.
-- Render credit/balance meters.
-- Render errors/setup hints.
-- Stop hardcoding Session/Weekly except when labels are actually known.
-
-Acceptance: z.ai tertiary window and OpenRouter balance both display correctly.
-
-### Phase 4 — UX polish
-
-- Better icons/metadata.
-- Settings page.
-- Refresh/backoff/stale state.
-- Threshold colors/notifications.
-
-### Phase 5 — packaging/docs
-
-- Install script.
-- KDE Neon install docs.
-- CodexBar attribution/license docs.
-- Troubleshooting guide.
-
-## Final recommendation
-
-Build `neon-codexbar` as a new KDE/Plasma frontend powered by CodexBar CLI.
-
-Use the existing widget projects as blueprints, but keep the architecture clean from day one:
-
-- CodexBar owns providers.
-- neon-codexbar owns KDE UX.
-- Provider additions happen upstream/CodexBar-first.
-- The app renders whatever CodexBar can output.
-
-That is the least dumb path. Suspiciously rare, but here we are.
+That gives us the best build document: Claude's useful implementation detail plus the architectural guardrails that keep this from turning into a second, worse CodexBar wearing KDE pants.
