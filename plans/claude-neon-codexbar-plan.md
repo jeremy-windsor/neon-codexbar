@@ -6,31 +6,36 @@ This document is the complete build spec. Hand it to an implementation agent. Ea
 
 ---
 
-## 1. What this is
+## 1. Architectural principle
 
-`neon-codexbar` is a Linux-native (KDE Plasma 6 / Wayland) systray widget plus a Python backend daemon. It surfaces real-time usage limits across many AI providers (Claude, Codex, z.ai, OpenRouter, OpenCode, etc.) via:
+> **CodexBar owns providers. neon-codexbar owns KDE UX.**
 
-1. **The vendored `codexbar` CLI binary** (steipete/CodexBar) for the providers it supports on Linux.
-2. **Native Python provider modules** for providers `codexbar` does not yet support on Linux (e.g. OpenCode).
+Provider auth, quota endpoints, cookie handling, API parsing, and provider-specific logic belong in upstream `codexbar` (or a maintained fork). `neon-codexbar` is the Linux/KDE shell: install, configure, render, diagnose. If a provider is missing or broken on Linux, the fix goes upstream in Swift via `docs/provider.md` — not reimplemented in Python in this repo.
 
-To the end user, neon-codexbar appears as a single integrated app. The fact that `codexbar` is invoked under the hood is an implementation detail. License attribution is documented in `NOTICE` and the About dialog, but the user-facing brand is **neon-codexbar**.
+```
+CodexBar / CodexBarCore       neon-codexbar
+─────────────────────         ──────────────────────
+providers, auth, fetch        widget, systray UX
+config, cookies, parsing      install/bootstrap
+CLI JSON output               source policy
+                              rendering, diagnostics
+```
 
 ## 2. Goals & non-goals
 
 **Goals**
-- Plasma 6 systray widget that works on Wayland (KDE Neon).
-- Multi-provider usage display with session/weekly/credits windows.
-- Zero hand-coding for any provider already supported by `codexbar` CLI on Linux.
-- Plugin architecture for custom providers.
-- Clean secrets management — secrets do not leak into the user's session env.
-- Backend in **Python 3.10+** (intentional — for maintainability by a Python-first developer).
-- MIT licensed, with full attribution to upstream `codexbar`.
+- Plasma 6 systray widget on Wayland (KDE Neon target).
+- Render whatever `codexbar` CLI emits — quota windows, credits, balances, identity, errors.
+- Auto-discover providers from `codexbar config dump`.
+- Linux-safe source policy (never use the failing `--source auto` defaults).
+- Clean install/uninstall.
+- MIT licensed with full attribution to upstream `codexbar`.
 
 **Non-goals**
-- macOS or Windows support.
-- Replicating every `codexbar` macOS feature (web cookie scraping, WidgetKit, etc.).
-- Modifying the upstream `codexbar` source code (we vendor the binary, we don't fork it).
-- Supporting providers that `codexbar` declares macOS-only (Cursor, Factory, Augment, Amp, etc.).
+- macOS / Windows support.
+- Reimplementing any provider logic in Python.
+- Storing provider secrets in our own config store.
+- Supporting providers `codexbar` declares macOS-only until upstream adds Linux support.
 
 ## 3. Architecture
 
@@ -45,309 +50,196 @@ To the end user, neon-codexbar appears as a single integrated app. The fact that
 │  └─────────────────────────────┬───────────────────────┘     │
 └────────────────────────────────┼─────────────────────────────┘
                                  │ reads snapshot.json
-                                 │ (atomic file watch)
                                  ▼
 ┌──────────────────────────────────────────────────────────────┐
-│  neon-codexbar-daemon  (Python, systemd --user service)      │
+│  neon-codexbar-daemon (Python, systemd --user)               │
 │  ┌─────────────────────────────────────────────────────┐     │
-│  │  Provider Registry                                  │     │
-│  │  ┌──────────────────────────────────────────────┐   │     │
-│  │  │  CodexBarCLIProvider  (one instance per      │   │     │
-│  │  │  codexbar-supported provider on Linux)       │   │     │
-│  │  └──────────────────────────────────────────────┘   │     │
-│  │  ┌──────────────────────────────────────────────┐   │     │
-│  │  │  Custom providers (OpenCodeProvider, …)      │   │     │
-│  │  └──────────────────────────────────────────────┘   │     │
+│  │  CodexBar Adapter Layer                             │     │
+│  │  - command construction                             │     │
+│  │  - source policy enforcement                        │     │
+│  │  - JSON parse → generic display blocks              │     │
+│  │  - redacted diagnostics                             │     │
 │  └─────────────────────────────┬───────────────────────┘     │
-│                                ▼                             │
-│              Normalizer → ProviderSnapshot                   │
 │                                ▼                             │
 │              Aggregator + atomic snapshot writer             │
 └──────────────────────────────────────────────────────────────┘
                                  │
                                  ▼
 ┌──────────────────────────────────────────────────────────────┐
-│  External resources                                          │
-│  - /usr/local/bin/codexbar              (vendored binary)    │
-│  - ~/.config/neon-codexbar/secrets.json (mode 600)           │
-│  - ~/.config/neon-codexbar/config.json                       │
+│  External (managed by codexbar, NOT us)                      │
+│  - codexbar binary (PATH or ~/.local/bin)                    │
+│  - ~/.codexbar/config.json     (provider config + secrets)   │
+│  - provider auth files (~/.codex, ~/.claude, etc.)           │
+│  - env vars (Z_AI_API_KEY, OPENROUTER_API_KEY, etc.)         │
+│                                                              │
+│  Owned by us:                                                │
+│  - ~/.config/neon-codexbar/config.json (UI prefs only)       │
 │  - ~/.cache/neon-codexbar/snapshot.json (daemon → widget)    │
-│  - ~/.local/share/opencode/             (OpenCode logs)      │
 └──────────────────────────────────────────────────────────────┘
 ```
 
 **Key design choices**
-- **File-watching IPC** between daemon and widget for v1. Simple, no D-Bus complexity. Migrate to D-Bus only if file-watching causes real problems.
-- **Daemon-based** so the widget can be cheap and synchronous. Daemon does all I/O.
-- **One subprocess per provider per refresh** to `codexbar` CLI. No batching — `--provider all` errors on Linux because of `--source auto` defaults.
+- File-watching IPC daemon → widget. Migrate to D-Bus only if file-watching proves unreliable.
+- Daemon runs all subprocesses; QML never spawns processes.
+- One subprocess per provider per refresh (no `--provider all`, fails on Linux).
+- **No parallel secret store.** Use `~/.codexbar/config.json` + env vars (CodexBar's existing surface).
 
 ## 4. Repository layout
 
 ```
 neon-codexbar/
-├── README.md                        # quick start
+├── README.md
 ├── LICENSE                          # MIT
-├── NOTICE                           # third-party attribution (codexbar, etc.)
+├── NOTICE                           # third-party attribution (codexbar)
 ├── CHANGELOG.md
-├── pyproject.toml                   # hatchling build, console scripts
+├── pyproject.toml
 ├── docs/
-│   ├── ARCHITECTURE.md              # detailed design (this doc, refined)
-│   ├── PROVIDERS.md                 # every supported provider + how to enable
-│   ├── ADDING_PROVIDERS.md          # how to write a custom provider plugin
-│   └── ATTRIBUTION.md               # codexbar credits + license text
+│   ├── ARCHITECTURE.md
+│   ├── SOURCE_POLICY.md             # Linux source policy table
+│   ├── ATTRIBUTION.md
+│   └── TROUBLESHOOTING.md
 ├── packaging/
-│   ├── install.sh                   # combined installer
+│   ├── install.sh
 │   ├── uninstall.sh
-│   ├── neon-codexbar.service        # systemd --user unit
-│   └── debian/                      # future .deb packaging
+│   └── neon-codexbar.service        # systemd --user unit
 ├── plasmoid/
 │   ├── metadata.json
-│   ├── contents/
-│   │   ├── ui/
-│   │   │   ├── main.qml
-│   │   │   ├── CompactRepresentation.qml   # panel icon
-│   │   │   ├── FullRepresentation.qml      # popup
-│   │   │   ├── ProviderCard.qml
-│   │   │   ├── UsageBar.qml
-│   │   │   └── ConfigGeneral.qml
-│   │   └── config/
-│   │       ├── main.xml
-│   │       └── config.qml
-│   └── translations/
+│   └── contents/
+│       ├── ui/
+│       │   ├── main.qml
+│       │   ├── CompactRepresentation.qml
+│       │   ├── FullRepresentation.qml
+│       │   ├── ProviderCard.qml
+│       │   ├── QuotaWindowBar.qml
+│       │   ├── CreditMeter.qml
+│       │   └── ConfigGeneral.qml
+│       └── config/
+│           ├── main.xml
+│           └── config.qml
 ├── src/
 │   └── neon_codexbar/
 │       ├── __init__.py
-│       ├── __main__.py              # `python -m neon_codexbar`
-│       ├── cli.py                   # `neon-codexbar` user-facing command
-│       ├── daemon.py                # `neon-codexbar-daemon` long-running service
-│       ├── models.py                # ProviderSnapshot, UsageWindow, CreditInfo
-│       ├── normalizer.py            # codexbar JSON → ProviderSnapshot
-│       ├── config.py                # config.json read/write
-│       ├── secrets.py               # secrets.json read/write
-│       ├── ipc/
-│       │   └── snapshot_writer.py   # atomic writes to snapshot.json
-│       ├── providers/
+│       ├── __main__.py
+│       ├── cli.py                   # neon-codexbar
+│       ├── daemon.py                # neon-codexbar-daemon
+│       ├── models.py                # generic display blocks
+│       ├── adapter/
 │       │   ├── __init__.py
-│       │   ├── base.py              # Provider abstract class
-│       │   ├── registry.py          # discovery + registration
-│       │   ├── codexbar.py          # CodexBarCLIProvider
-│       │   └── opencode.py          # custom OpenCode provider
-│       └── codexbar_runtime/
-│           ├── installer.py         # downloads/verifies codexbar binary
-│           ├── catalog.py           # known codexbar providers + sources
-│           └── runner.py            # subprocess wrapper
-├── vendor/
-│   └── codexbar/
-│       ├── README.md                # why vendored, how versioned
-│       └── version.txt              # pinned version + sha256
+│       │   ├── runner.py            # subprocess wrapper
+│       │   ├── discovery.py         # parse `codexbar config dump`
+│       │   ├── source_policy.py     # Linux-safe source per provider
+│       │   ├── installer.py         # ensure codexbar binary present
+│       │   └── normalizer.py        # JSON → display blocks
+│       ├── config.py                # OUR config (UI prefs only)
+│       └── ipc/
+│           └── snapshot_writer.py
 └── tests/
     ├── unit/
     │   ├── test_normalizer.py
-    │   ├── test_codexbar_provider.py
-    │   ├── test_secrets.py
-    │   └── fixtures/                # golden JSON samples
+    │   ├── test_source_policy.py
+    │   ├── test_discovery.py
+    │   └── fixtures/                # golden JSON samples per provider
     └── integration/
         └── test_daemon_lifecycle.py
 ```
 
+Note: no `secrets.py`, no `providers/` directory. Provider logic lives in CodexBar.
+
 ## 5. Licensing & attribution
 
-- **Project license:** MIT (chosen for compatibility with upstream `codexbar`).
-- **`codexbar` binary:** NOT bundled in the source repo. Downloaded at install time from `github.com/steipete/CodexBar/releases`. Version pinned in `vendor/codexbar/version.txt` with SHA-256 checksum.
-- **`NOTICE` file** lists:
-  - `codexbar` — MIT, Peter Steinberger, https://github.com/steipete/CodexBar
-  - Any other third-party components.
-- **About dialog** in widget: "Powered by codexbar (MIT, © Peter Steinberger). neon-codexbar is an independent project, not affiliated with or endorsed by Anthropic, OpenAI, or codexbar's authors."
-- **README** clearly states `codexbar` is a runtime dependency that's auto-installed.
-- **Do not strip `codexbar` branding from the binary.** When `neon-codexbar --version` is run, it should print both versions (`neon-codexbar X.Y.Z`, then a line listing the vendored `codexbar` version).
+- **Project license:** MIT.
+- **`codexbar` binary:** not bundled in source. Downloaded at install time from `github.com/steipete/CodexBar/releases`. Version pinned with SHA-256.
+- **`NOTICE`:** lists `codexbar` (MIT, Peter Steinberger).
+- **About dialog:** "neon-codexbar is a KDE/Plasma frontend powered by the CodexBar CLI provider engine. Powered by codexbar (MIT, © Peter Steinberger). Independent project, not affiliated with or endorsed by Anthropic, OpenAI, or codexbar's authors."
+- **Do not strip codexbar branding.** `neon-codexbar --version` prints both versions.
 
-## 6. Prerequisites (runtime)
+## 6. Prerequisites
 
-- KDE Plasma 6
-- Wayland session (X11 should also work, but Wayland is the target)
-- Python 3.10+
-- `pip` and `python3-venv`
-- `kpackagetool6`
-- `systemd` (for `--user` service)
-- `curl` and `tar` (for installer)
-- 64-bit x86_64 or aarch64 Linux (codexbar binary platforms)
+- KDE Plasma 6, Wayland session (X11 should also work)
+- Python 3.10+, pip, python3-venv
+- `kpackagetool6`, `systemd --user`, `curl`, `tar`
+- 64-bit x86_64 or aarch64 Linux
 
-Optional, per provider:
-- `claude` CLI authenticated → enables Claude
-- `codex` CLI authenticated → enables Codex
-- `gemini` CLI authenticated → enables Gemini
-- API tokens stored via `neon-codexbar add-secret` → enables z.ai, OpenRouter, Kimi K2, Copilot
+Per-provider auth is the user's responsibility (or codexbar's), not ours:
+- `claude` / `codex` / `gemini` CLIs authenticated → those providers light up
+- API tokens set in `~/.codexbar/config.json` or supported env vars → API providers light up
 
-## 7. codexbar CLI integration layer
+## 7. CodexBar adapter layer
 
-This is the heart of the system. All `codexbar` interaction goes through `src/neon_codexbar/codexbar_runtime/`.
+### 7.1 Binary management (`adapter/installer.py`)
+- `ensure_installed()` checks PATH for `codexbar`. If missing or version mismatch with `vendor/codexbar/version.txt`, downloads tarball, verifies SHA-256, installs to `~/.local/bin/codexbar`.
+- Surfaces clear errors for: network down, checksum mismatch, unsupported arch.
 
-### 7.1 Installation
-- `codexbar_runtime/installer.py` exposes `ensure_installed()`:
-  - Looks for `codexbar` in PATH.
-  - If found and version matches `vendor/codexbar/version.txt`: done.
-  - If missing or version mismatch: downloads tarball from GitHub Releases for the host arch, verifies SHA-256, installs to `~/.local/bin/codexbar`.
-- Triggered by `neon-codexbar install-runtime` and by the daemon at startup.
-- Failure modes: network down, checksum mismatch, unsupported arch — all surface clear errors.
+### 7.2 Invocation contract (`adapter/runner.py`)
+- One subprocess per provider per refresh.
+- Always pass `--provider <id> --source <type> --format json`. Never default `--source`.
+- Pass through env vars CodexBar supports (`Z_AI_API_KEY`, `OPENROUTER_API_KEY`, etc.). Do **not** invent our own env-var names.
+- 10s timeout per call. stderr captured for diagnostics; never surfaced to widget.
 
-### 7.2 Invocation contract
-- One subprocess per provider per refresh cycle.
-- Always pass:
-  - `--provider <id>`
-  - `--source <type>` (never default — defaults to `auto` which fails on Linux)
-  - `--format json`
-- Inject only the env vars the specific provider needs, from `secrets.json`. Do not pass through the user's full env.
-- 10-second timeout per call.
-- stderr captured for diagnostics; surfaced to the daemon log, never to the widget.
+### 7.3 Provider discovery (`adapter/discovery.py`)
+- Calls `codexbar config dump --format json`.
+- Yields the list of provider IDs CodexBar knows about.
+- No hardcoded list in our repo. When CodexBar adds a provider, we pick it up automatically.
 
-### 7.3 Provider catalog
-`codexbar_runtime/catalog.py` is a hand-maintained registry of `codexbar` providers known to work on Linux:
+### 7.4 Source policy (`adapter/source_policy.py`)
+Linux source defaults are unreliable. We maintain a small policy table mapping provider ID → preferred source on Linux. Initial table:
 
-```python
-CODEXBAR_PROVIDERS = {
-    "codex":      {"source": "cli",  "secrets_required": []},
-    "claude":     {"source": "cli",  "secrets_required": []},
-    "zai":        {"source": "api",  "secrets_required": ["Z_AI_API_KEY"]},
-    "openrouter": {"source": "api",  "secrets_required": ["OPENROUTER_API_KEY"]},
-    "kimik2":     {"source": "api",  "secrets_required": ["KIMI_K2_API_KEY"]},
-    "gemini":     {"source": "api",  "secrets_required": []},  # OAuth via gemini CLI
-    "copilot":    {"source": "api",  "secrets_required": ["COPILOT_API_TOKEN"]},
-    # add new providers here as steipete adds Linux support upstream
-}
-```
+| Provider | Linux source | Notes |
+|---|---|---|
+| codex | `cli` | tested working |
+| claude | `cli` | tested working |
+| zai | `api` | tested working with `Z_AI_API_KEY` |
+| openrouter | `api` | tested working with `OPENROUTER_API_KEY` |
+| kimik2 | `api` | needs token test |
+| gemini | `api` | needs gemini CLI auth test |
+| copilot | `api` | needs device-flow test |
+| kilo | `api` w/ CLI fallback | needs auth test |
+| (others) | omit until validated |
 
-When upstream `codexbar` adds a new Linux-compatible provider, the only change needed in neon-codexbar is one entry in this dict.
+Unknown providers from discovery default to "skip + show in diagnostics," not "guess at source."
 
-### 7.4 Auto-discovery
-`neon-codexbar discover` runs every entry in the catalog with current secrets, and reports:
-- Which providers returned valid usage data.
-- Which returned auth errors (provider exists but not configured).
-- Which returned "not supported on Linux".
+### 7.5 Normalizer (`adapter/normalizer.py`)
+**Generic, no hardcoded window meanings.** Maps CodexBar JSON to display blocks. The renderer shows whatever exists with the labels CodexBar provides.
 
-Results saved to `~/.cache/neon-codexbar/discovery.json`. Widget shows only "available" providers by default; user can re-enable disabled ones from settings.
+## 8. Display block model (`models.py`)
 
-## 8. Custom provider plugin system
-
-### 8.1 Provider abstract base (`providers/base.py`)
 ```python
 @dataclass
-class ProviderInfo:
-    id: str
-    display_name: str
-    branding_color: str | None = None
-    dashboard_url: str | None = None
-
-class Provider(ABC):
-    info: ProviderInfo
-
-    @abstractmethod
-    def is_available(self) -> bool:
-        """Return True if this provider can be queried right now."""
-
-    @abstractmethod
-    def fetch(self) -> ProviderSnapshot:
-        """Fetch current usage. Raise ProviderError on failure."""
-
-    def secrets_required(self) -> list[str]:
-        return []
-```
-
-### 8.2 Registry (`providers/registry.py`)
-- Imports every module in `providers/` package.
-- Each module registers its provider class via a `@register_provider` decorator.
-- Registry exposes `list_providers()`, `get_provider(id)`.
-
-### 8.3 First custom provider — OpenCode
-
-**Research spike required before implementation.** Open questions:
-- Where does OpenCode write logs? (likely `~/.local/share/opencode/`)
-- What's the JSONL session format?
-- Does it expose any usage/quota API?
-
-Once answered, implement `providers/opencode.py`:
-- Reads OpenCode session JSONL files modified within the last 7 days.
-- Aggregates input + output tokens.
-- Computes 5-hour and 7-day usage windows from session timestamps.
-- Returns a `ProviderSnapshot` with `primary` (5h) and `secondary` (7d).
-- No external secrets needed (local file parsing only).
-
-## 9. Data normalization
-
-### 9.1 Models (`models.py`)
-```python
-@dataclass
-class UsageWindow:
+class QuotaWindow:
     used_percent: float
     resets_at: datetime | None
+    window_label: str | None      # from CodexBar; e.g. "5 hours window"
     window_minutes: int | None
-    label: str  # human-readable, e.g. "Session", "Weekly", "5-hour"
 
 @dataclass
-class CreditInfo:
-    balance: float | None
+class CreditMeter:
+    label: str                    # "Balance" / "Total Credits" / etc.
+    used: float | None
     total: float | None
     used_percent: float | None
-    currency: str = "USD"
+    currency: str | None
 
 @dataclass
-class ProviderSnapshot:
+class ProviderCard:
     provider_id: str
-    display_name: str
-    is_connected: bool
-    error_message: str | None
-    primary: UsageWindow | None
-    secondary: UsageWindow | None
-    tertiary: UsageWindow | None      # third window (z.ai uses this)
-    credits: CreditInfo | None
+    display_name: str             # from discovery
+    source: str                   # which source produced the data
+    version: str | None
+    plan: str | None
     identity: dict
+    quota_windows: list[QuotaWindow]   # 0..N, in CodexBar order
+    credit_meters: list[CreditMeter]   # 0..N
+    model_usage: list[dict]
+    error_message: str | None
+    setup_hint: str | None
+    is_stale: bool
     last_update: datetime
-    source: str                       # "codexbar:cli", "opencode:local", etc.
 ```
 
-### 9.2 codexbar JSON → ProviderSnapshot mapping
-- `provider`, `usage.primary/secondary/tertiary`, `credits`, `identity`, `updatedAt` map directly.
-- **Window-label override map** in `normalizer.py` per provider — e.g. for z.ai, `primary.label = "Weekly"`, `tertiary.label = "5-hour"`. Fixes the labeling quirk seen in jjlinares' widget.
-- Defensive parsing: every field optional, never throws on malformed JSON.
+The renderer does not assume Session/Weekly. It draws each `QuotaWindow` and `CreditMeter` with its given label.
 
-### 9.3 Golden test fixtures
-- One real JSON sample per supported provider in `tests/unit/fixtures/`.
-- `test_normalizer.py` runs each through the normalizer and asserts the resulting `ProviderSnapshot`.
+## 9. Configuration (ours, UI only)
 
-## 10. Secrets management
-
-### 10.1 Storage
-- `~/.config/neon-codexbar/secrets.json`, mode `0600`.
-- Schema:
-  ```json
-  {
-    "version": 1,
-    "providers": {
-      "zai":        { "Z_AI_API_KEY":      "..." },
-      "openrouter": { "OPENROUTER_API_KEY": "..." }
-    }
-  }
-  ```
-- **Never** stored in `~/.config/plasma-workspace/env/` — that file leaks the value to every app the user runs.
-
-### 10.2 Access
-- `secrets.py` is the only module allowed to read the file.
-- The codexbar runner asks `secrets.py` for the env dict it needs, gets a freshly-built dict containing only the relevant vars, and passes it to `subprocess.run(env=...)`.
-- Secrets never logged. Redacted in `--debug` output.
-
-### 10.3 CLI surface
-```
-neon-codexbar add-secret <provider> <env_var> [--from-stdin | --prompt]
-neon-codexbar list-secrets                # prints redacted (last 4 chars only)
-neon-codexbar remove-secret <provider> <env_var>
-```
-
-### 10.4 Future v2: KWallet
-- Document the desired interface in `secrets.py` so `JSONFileBackend` can be swapped for `KWalletBackend` without touching call sites.
-- Defer implementation to v2.
-
-## 11. Configuration
-
-### 11.1 Config file
 `~/.config/neon-codexbar/config.json`:
 ```json
 {
@@ -355,46 +247,44 @@ neon-codexbar remove-secret <provider> <env_var>
   "refresh_interval_seconds": 300,
   "warning_threshold_percent": 70,
   "critical_threshold_percent": 90,
-  "enabled_providers": ["codex", "claude", "zai", "openrouter", "opencode"],
+  "provider_display_mode": "enabled-only",
   "provider_overrides": {
-    "zai": {
-      "primary_label": "Weekly",
-      "tertiary_label": "5-hour"
-    }
+    "zai": { "display_name": "Z.ai (GLM)" }
   }
 }
 ```
 
-### 11.2 CLI surface
+`provider_display_mode`: `enabled-only` | `all-configured` | `debug-all`.
+
+**No secrets here.** API keys live where CodexBar already reads them.
+
+CLI surface:
 ```
 neon-codexbar config show
 neon-codexbar config set <key> <value>
-neon-codexbar enable-provider <id>
-neon-codexbar disable-provider <id>
+neon-codexbar discover         # runs `codexbar config dump` + source policy probe
+neon-codexbar diagnose         # redacted dump for troubleshooting
+neon-codexbar fetch [--json]   # one-shot fetch
+neon-codexbar install-runtime  # ensure codexbar binary
 ```
 
-### 11.3 Widget settings UI
-- Refresh interval (presets: 1m, 2m, 5m, 15m, manual).
-- Warning + critical thresholds.
-- Per-provider toggles (driven by discovery results).
-- Reorder providers (drag-and-drop optional, defer if QML drag is hard).
+## 10. Backend daemon
 
-## 12. Backend daemon
-
-### 12.1 Lifecycle
+### 10.1 Lifecycle
 - Long-running Python process.
-- Started by `systemd --user` service unit `neon-codexbar.service`.
-- Logs to journald (`journalctl --user -u neon-codexbar`).
+- `systemd --user` unit `neon-codexbar.service`.
+- Logs to journald: `journalctl --user -u neon-codexbar`.
 
-### 12.2 Refresh loop
+### 10.2 Refresh loop
 - Every `refresh_interval_seconds`:
-  1. For each enabled provider, call `provider.fetch()` in a thread pool (max 8 concurrent).
-  2. Collect `ProviderSnapshot` results (or error placeholders).
-  3. Atomic-write all snapshots into `~/.cache/neon-codexbar/snapshot.json` (write to `.tmp`, then rename).
-- On startup, immediate refresh (don't wait for first interval).
-- Manual refresh via SIGUSR1 or via writing a sentinel file (widget triggers this).
+  1. For each enabled provider, call `runner.fetch(provider_id, source)` in a thread pool (max 8 concurrent).
+  2. Normalize each result to a `ProviderCard`.
+  3. Atomic-write all cards into `~/.cache/neon-codexbar/snapshot.json` (write `.tmp` then rename).
+- Immediate refresh on startup.
+- Manual refresh: SIGUSR1 or sentinel file (widget triggers via touch).
+- Stale detection: if a fetch hasn't succeeded in `2 * refresh_interval`, mark `is_stale=true`.
 
-### 12.3 systemd unit (`packaging/neon-codexbar.service`)
+### 10.3 systemd unit
 ```ini
 [Unit]
 Description=neon-codexbar daemon
@@ -410,188 +300,155 @@ RestartSec=5
 WantedBy=default.target
 ```
 
-## 13. KDE Plasmoid (frontend)
+## 11. KDE Plasmoid (frontend)
 
-### 13.1 Package metadata
-- Plugin ID: `org.jeremywindsor.neon-codexbar` (or your namespace; not `com.codexbar.*`).
-- Name: "neon-codexbar".
-- Author/license fields filled.
-- Category: `System Information` or `Utilities`.
+### 11.1 Package metadata
+- Plugin ID: `org.jeremywindsor.neon-codexbar`
+- Name: "neon-codexbar"
+- Category: `System Information`
 
-### 13.2 QML structure
-- `main.qml` — entry point, loads compact + full representations.
-- `CompactRepresentation.qml` — panel icon. Color-coded ring based on max usage across all enabled providers.
-- `FullRepresentation.qml` — popup. Header with refresh button + settings cog. Scrollable list of `ProviderCard`.
-- `ProviderCard.qml` — provider icon, name, usage bars (primary/secondary, tertiary if present), reset countdown, dashboard link.
-- `UsageBar.qml` — color-coded based on thresholds from config.
-- `ConfigGeneral.qml` — settings dialog.
+### 11.2 QML components
+- `main.qml` — entry point.
+- `CompactRepresentation.qml` — panel icon. Color-coded ring: green/yellow/red based on max `used_percent` across all visible quota windows + credit meters.
+- `FullRepresentation.qml` — popup. Refresh button + settings cog. Scrollable provider cards.
+- `ProviderCard.qml` — renders a `ProviderCard` model: icon, name, plan, dynamic list of quota bars, dynamic list of credit meters, error/setup hints.
+- `QuotaWindowBar.qml` — single quota window.
+- `CreditMeter.qml` — single credit/balance.
+- `ConfigGeneral.qml` — settings.
 
-### 13.3 Data binding
-- A `FileWatcher` (or `QFileSystemWatcher` from a Plasma data engine) watches `~/.cache/neon-codexbar/snapshot.json`.
-- On change, parse and bind to a ListModel feeding the cards.
-- No direct `subprocess`/`Process` calls from QML. Daemon is the only thing that runs subprocesses.
+### 11.3 Data binding
+- `FileWatcher` (or `Plasma5Support.DataSource` polling at 5s if `FileWatcher` proves unreliable on Plasma 6) watches `snapshot.json`.
+- On change, parse → ListModel → cards.
+- Widget never spawns subprocesses.
 
-### 13.4 Theming
-- All colors from `PlasmaCore.Theme`.
-- Test in dark + light Plasma themes.
+### 11.4 Theming
+- All colors from `PlasmaCore.Theme`. Test dark + light.
 
-## 14. Build & packaging
+## 12. Build & packaging
 
-### 14.1 Plasmoid
-- `kpackagetool6 -t Plasma/Applet -i plasmoid/`
-- Reinstall: `kpackagetool6 -t Plasma/Applet -u plasmoid/`
+### 12.1 Plasmoid
+- Install: `kpackagetool6 -t Plasma/Applet -i plasmoid/`
+- Update: `kpackagetool6 -t Plasma/Applet -u plasmoid/`
 - Uninstall: `kpackagetool6 -t Plasma/Applet -r org.jeremywindsor.neon-codexbar`
 
-### 14.2 Python package
+### 12.2 Python package
 - `pyproject.toml` with hatchling.
-- Console scripts:
-  - `neon-codexbar` → `neon_codexbar.cli:main`
-  - `neon-codexbar-daemon` → `neon_codexbar.daemon:main`
-- Install: `pip install --user .`
+- Console scripts: `neon-codexbar`, `neon-codexbar-daemon`.
+- Install: `pip install --user .`.
 
-### 14.3 Combined installer (`packaging/install.sh`)
-Steps in order:
-1. Verify Plasma 6 (`plasmashell --version`) and Python 3.10+.
+### 12.3 Combined installer (`packaging/install.sh`)
+1. Verify Plasma 6 + Python 3.10+.
 2. `pip install --user .`
-3. `neon-codexbar install-runtime` (downloads `codexbar` binary if missing).
+3. `neon-codexbar install-runtime` (codexbar binary).
 4. `kpackagetool6 -t Plasma/Applet -i plasmoid/`
 5. Install systemd unit to `~/.config/systemd/user/`.
-6. `systemctl --user daemon-reload`
-7. `systemctl --user enable --now neon-codexbar.service`
-8. Print "Add the neon-codexbar widget to your panel: right-click panel → Add Widgets → search 'neon-codexbar'".
+6. `systemctl --user daemon-reload && systemctl --user enable --now neon-codexbar.service`
+7. Print: "Add the neon-codexbar widget: right-click panel → Add Widgets → search 'neon-codexbar'."
 
-`uninstall.sh` reverses all of the above.
+`uninstall.sh` reverses.
 
-### 14.4 Future distribution
-- AUR package (deferred).
-- KDE Store submission (deferred).
-- `.deb` for KDE Neon (deferred — `packaging/debian/` scaffold only).
+## 13. Testing
 
-## 15. Testing
+### 13.1 Unit tests
+- `test_normalizer.py` — golden JSON fixtures (codex, claude, zai, openrouter, plus error cases) → expected `ProviderCard`.
+- `test_source_policy.py` — provider ID → expected source.
+- `test_discovery.py` — mock `codexbar config dump`, verify provider list extraction.
+- `test_runner.py` — mock subprocess; verify flags, env, timeout, error handling.
 
-### 15.1 Unit tests (`tests/unit/`)
-- `test_normalizer.py` — golden JSON inputs from `fixtures/` → expected `ProviderSnapshot`.
-- `test_codexbar_provider.py` — mock `subprocess.run`, verify correct flags, env, and parsing.
-- `test_secrets.py` — read/write/redact.
-- `test_config.py` — schema validation + defaults.
+### 13.2 Integration tests
+- Daemon in tempdir, two refresh cycles, verify `snapshot.json` is well-formed.
+- Optional: real `codexbar` binary against authenticated codex+claude (skipped without creds).
 
-### 15.2 Integration tests (`tests/integration/`)
-- Spin up the daemon in a tempdir, run two refresh cycles, verify `snapshot.json` is written and well-formed.
-- Optional: real `codexbar` binary against a stub provider account (skipped in CI without credentials).
+### 13.3 Widget verification
+- Manual checklist in `docs/QA.md`: dark/light theme, 0% / 50% / 95% usage, error state, no providers, narrow panel, vertical panel, z.ai 3-window provider, OpenRouter credit-only provider.
 
-### 15.3 Widget verification
-- Manual checklist in `docs/QA.md`: dark theme, light theme, 0% / 50% / 95% usage, error state, no providers enabled, narrow panel, vertical panel.
+## 14. Future-proofing
 
-## 16. Documentation
+When CodexBar adds a Linux-supported provider:
+1. Run `codexbar --version` → confirm pinned version supports it.
+2. If new arch needed, bump `vendor/codexbar/version.txt`.
+3. Add a row to `source_policy.py` if needed (or leave in default skip-list until validated).
+4. (Maybe) add display-name override in `config.json`.
 
-- `README.md` — installation, what it does, screenshot, license.
-- `docs/ARCHITECTURE.md` — this plan, refined as code lands.
-- `docs/PROVIDERS.md` — every supported provider, how to enable it, what secrets it needs.
-- `docs/ADDING_PROVIDERS.md` — step-by-step guide for writing a custom Python provider.
-- `docs/ATTRIBUTION.md` — full credit to upstream `codexbar`, MIT license text.
-- `CHANGELOG.md` — kept current per release.
+No QML changes. No widget rebuild. Discovery picks it up.
 
-## 17. Future-proofing for new codexbar providers
+## 15. Phased delivery
 
-When steipete adds a new provider to `codexbar` that works on Linux:
-
-1. Update `vendor/codexbar/version.txt` to the new version + sha.
-2. Add an entry to `CODEXBAR_PROVIDERS` in `codexbar_runtime/catalog.py`.
-3. (Optional) Add a window-label override in `normalizer.py` if the provider's window semantics need clarifying.
-4. Bump neon-codexbar version, ship.
-
-That's it. No QML changes, no widget rebuild needed.
-
-If the agent is patient: write a follow-up issue to auto-discover providers from `codexbar config dump` so step 2 isn't manual either.
-
-## 18. Phased delivery
-
-Each phase has explicit acceptance criteria. The agent should not start a phase before the previous phase's criteria are met.
-
-### Phase 1 — Skeleton + read-only POC
-- Repo scaffolded as in section 4.
-- `models.py`, `providers/base.py`, `providers/registry.py` complete.
-- `codexbar_runtime/installer.py` + `runner.py` complete.
-- `providers/codexbar.py` implemented for **codex + claude only**.
-- `normalizer.py` handles those two.
-- `neon-codexbar fetch --json` prints a JSON array of two `ProviderSnapshot` objects.
-- Unit tests pass for normalizer with golden fixtures.
-- **Acceptance:** running `neon-codexbar fetch --json` on a machine with `codexbar` and authenticated `codex`+`claude` CLIs prints valid usage data.
+### Phase 1 — Scaffold + adapter proof
+- Repo scaffolded per section 4.
+- `models.py`, `adapter/runner.py`, `adapter/installer.py`, `adapter/source_policy.py`, `adapter/normalizer.py` complete.
+- `cli.py` exposes `fetch`, `discover`, `install-runtime`.
+- Source policy implemented for codex, claude, zai, openrouter.
+- Unit tests: normalizer + source_policy + golden fixtures green.
+- **Acceptance:** `neon-codexbar fetch --json` returns valid `ProviderCard` JSON for the four tested providers on a machine with their auth in place.
 
 ### Phase 2 — Daemon + IPC
-- `daemon.py` implements the refresh loop.
-- `ipc/snapshot_writer.py` does atomic writes.
-- systemd unit file present.
-- `neon-codexbar config` subcommand with show/set/enable-provider/disable-provider.
-- **Acceptance:** `systemctl --user start neon-codexbar` runs the daemon, `~/.cache/neon-codexbar/snapshot.json` updates every N seconds, `journalctl --user -u neon-codexbar` shows clean logs.
+- `daemon.py` refresh loop.
+- `ipc/snapshot_writer.py` atomic writes.
+- systemd unit installed.
+- Stale detection works.
+- **Acceptance:** `systemctl --user start neon-codexbar` runs cleanly. `~/.cache/neon-codexbar/snapshot.json` updates every N seconds. `journalctl --user -u neon-codexbar` shows clean logs. Killing the daemon results in `is_stale=true` after 2× refresh interval.
 
-### Phase 3 — Plasmoid v1
-- Plasmoid package installs via `kpackagetool6`.
-- Reads `snapshot.json` via `FileWatcher`.
-- Renders cards for codex + claude.
-- Panel icon shows color-coded ring based on max usage.
-- Manual refresh button.
-- **Acceptance:** widget on panel shows the same data as `neon-codexbar fetch`. Panel icon color tracks usage.
+### Phase 3 — Plasmoid v1 (generic renderer)
+- Package installs via `kpackagetool6`.
+- `FileWatcher` reads `snapshot.json`.
+- `ProviderCard.qml` renders dynamic quota windows + credit meters (no Session/Weekly assumptions).
+- Panel icon: color-coded ring on max usage.
+- Manual refresh button (touches sentinel file).
+- **Acceptance:** widget shows codex + claude (Session/Weekly), z.ai (three windows with their actual labels), OpenRouter (balance meter, no quota windows). All match `neon-codexbar fetch` output.
 
-### Phase 4 — Provider expansion
-- `CODEXBAR_PROVIDERS` catalog populated for: zai, openrouter, kimik2, gemini, copilot.
-- Window-label overrides in normalizer for z.ai.
-- `neon-codexbar add-secret` / `list-secrets` / `remove-secret` commands.
-- Discovery command (`neon-codexbar discover`).
-- **Acceptance:** with secrets configured, all six providers above show in widget with correct labels.
+### Phase 4 — Discovery + provider expansion
+- `adapter/discovery.py` calls `codexbar config dump`.
+- `provider_display_mode: enabled-only` filters list.
+- Source policy table extended (gemini, copilot, kimik2, kilo) with documented test results.
+- `neon-codexbar diagnose` produces redacted dump.
+- **Acceptance:** with relevant auth in place, all working providers appear automatically. Diagnose output redacts secrets but shows source, exit code, error message per provider.
 
-### Phase 5 — Custom OpenCode provider
-- Research spike: document OpenCode's log format in `docs/PROVIDERS.md`.
-- `providers/opencode.py` reads logs, computes 5h + 7d windows.
-- Tests with synthetic log fixtures.
-- **Acceptance:** OpenCode card appears in widget when OpenCode has been used recently.
-
-### Phase 6 — Polish
-- Settings UI in plasmoid (`ConfigGeneral.qml`).
-- Configurable thresholds with live preview.
+### Phase 5 — UX polish
+- `ConfigGeneral.qml` settings UI: refresh interval, thresholds, display mode, per-provider show/hide.
 - About dialog with codexbar attribution.
-- Per-provider show/hide toggles in widget.
 - README screenshots.
-- **Acceptance:** non-developer user can install, configure, and use the widget without reading code.
+- Threshold-based notifications (optional, behind a toggle).
+- **Acceptance:** non-developer can install, configure, and use without reading code.
 
-### Phase 7 — Distribution prep
-- `install.sh` and `uninstall.sh` polished.
-- `.desktop` file for app menu entry.
-- Tag v0.1.0 release.
-- **Acceptance:** clean VM install via `install.sh` results in a working widget on the panel.
+### Phase 6 — Distribution
+- `install.sh` / `uninstall.sh` polished and idempotent.
+- `.desktop` file for app menu.
+- Tag v0.1.0.
+- **Acceptance:** clean KDE Neon VM → `install.sh` → working widget on panel.
 
-## 19. Open questions for the agent
+## 16. Open questions
 
-These need resolution before the relevant phase begins:
+1. **Plasma 6 `FileWatcher`** — verify it exists and works. Fallback: `Plasma5Support.DataSource` polling at 5s.
+2. **Daemon vs. on-demand** — daemon model is current plan. Alternative: widget runs `neon-codexbar fetch` on its own timer. Tradeoff: simpler, but ~10× more subprocess cost.
+3. **`codexbar config dump` schema** — confirm the JSON shape exposes the provider list cleanly. If not, parse text output as a fallback.
+4. **Error provider display** — in `enabled-only` mode, do error-state providers show or hide? Recommend: show only if explicitly enabled in CodexBar config.
+5. **i18n** — defer to v0.2.
 
-1. **OpenCode log format** — research spike at start of Phase 5.
-2. **Plasmoid file-watching** — confirm Plasma 6 has a usable `FileWatcher` QML element. If not, fall back to a `Plasma5Support.DataSource` polling at 5s.
-3. **Daemon vs. on-demand fetch** — confirm the daemon model is acceptable. Alternative: widget invokes `neon-codexbar fetch` directly every refresh interval. Tradeoff: simpler architecture, more startup cost per refresh.
-4. **Provider auto-discovery scope** — should the catalog be hand-maintained (current plan) or should `neon-codexbar` parse `codexbar config dump` to auto-populate? Defer to Phase 4 review.
-5. **Internationalization** — defer to v2 unless the user asks.
-
-## 20. Risks & mitigations
+## 17. Risks & mitigations
 
 | Risk | Mitigation |
 |---|---|
-| `codexbar` JSON schema changes between versions | Pin version + checksum; integration tests run against the pinned version; bump only when intentional |
-| `codexbar` project abandoned | Vendoring strategy is binary-only; if upstream dies, neon-codexbar can fork or replace runtime gracefully |
-| User upgrades `codexbar` outside neon-codexbar's control | `installer.py` checks version on each daemon start; warn if mismatch |
-| Provider auto-discovery noisy (lots of unconfigured providers shown as errors) | Hide "auth error" providers by default; user opts in from settings |
-| Secrets file readable by malware in user session | `chmod 600`; document KWallet roadmap; do not pass secrets through env to anything except the codexbar subprocess |
-| File-watching IPC misses an update | Daemon also touches `snapshot.json` mtime even on no-change to wake watchers; if this proves unreliable, migrate to D-Bus signal |
-| Widget shows stale data when daemon is dead | Plasmoid checks snapshot mtime; if older than `2 * refresh_interval`, dim icon and show "stale" badge |
+| CodexBar JSON schema changes between versions | Pin version + sha; integration tests run against pinned version; bump only intentionally |
+| `codexbar config dump` shape changes | Wrap parsing in adapter; one place to fix |
+| CodexBar project abandonment | Vendoring is binary-only; codebase stays usable; can swap to fork |
+| User upgrades codexbar outside our control | Daemon checks version on startup; warns on mismatch |
+| Linux-broken provider sneaks into discovery | Default unknown providers to skip; require explicit source policy entry |
+| File-watching IPC misses an update | Daemon also touches mtime on no-change; fallback to polling DataSource |
+| Widget shows stale data when daemon dies | `is_stale=true` after 2× refresh; renderer dims + shows "stale" badge |
+| Provider needs Linux fix that's not upstream yet | Document the upstream PR path; don't patch in our repo |
 
-## 21. Definition of done (v0.1.0)
+## 18. Definition of Done (v0.1.0)
 
-- All Phase 1–6 acceptance criteria met.
-- `pip install --user .` + `install.sh` produces a working install on a fresh KDE Neon VM.
+- All Phase 1–5 acceptance criteria met.
+- `pip install --user .` + `install.sh` produces a working install on a clean KDE Neon VM.
 - README has screenshot of the widget on a panel.
-- LICENSE, NOTICE, ATTRIBUTION docs are correct.
+- LICENSE, NOTICE, ATTRIBUTION docs correct.
 - `neon-codexbar --version` prints both neon-codexbar and codexbar versions.
-- All unit tests green; integration tests green when run with credentials.
-- No upstream `codexbar` source is bundled or modified.
+- All unit tests green; integration tests green where credentials available.
+- No upstream codexbar source bundled or modified.
+- No provider auth/parsing logic in `src/neon_codexbar/`.
 
 ---
 
-**Implementation order matters.** Do not skip phases. Each one builds on the last. If a phase's acceptance criteria can't be met, stop and surface the blocker rather than improvising.
+**Implementation order matters. Do not skip phases. Each builds on the last. If acceptance criteria can't be met, stop and surface the blocker rather than improvise.**
