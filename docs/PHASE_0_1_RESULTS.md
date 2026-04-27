@@ -1,70 +1,117 @@
 # Phase 0-1 Results
 
-Date: 2026-04-26  
-Scope: Phase 0 validation + Phase 1 Python adapter proof only.
+Date: 2026-04-26
+Scope: Phase 0 validation + Phase 1 Python adapter proof.
 
-## Phase 0 command findings
+## Status
 
-`codexbar` is not installed on this host. PATH/common-path checks failed for:
+Phase 0 live validation **complete** for all four target providers on the Debian
+LXC dev host (CodexBar CLI installed at `/home/claude/.local/bin/codexbar`,
+resolves to `CodexBarCLI`).
 
-- `~/.local/bin/codexbar`
-- `~/bin/codexbar`
-- `/usr/local/bin/codexbar`
-- `/opt/neon-codexbar/bin/codexbar`
+| Provider | Source | Result | Shape captured |
+|---|---|---|---|
+| codex | cli | 2 quota windows + Credits meter | yes |
+| claude | cli | 2 quota windows | yes |
+| zai | api | 3 quota windows | yes |
+| openrouter | api | Balance + Key Quota meters | yes |
 
-Exact commands tested:
+## CodexBar CLI command shape (verified)
 
-| Command | Result |
-|---|---|
-| `codexbar --version` | `bash: codexbar: command not found`, exit `127` |
-| `codexbar config dump --pretty` | `bash: codexbar: command not found`, exit `127` |
-| `codexbar config dump --format json` | `bash: codexbar: command not found`, exit `127` |
-| `codexbar --provider codex --source cli --format json --pretty` | `bash: codexbar: command not found`, exit `127` |
-| `codexbar --provider claude --source cli --format json --pretty` | `bash: codexbar: command not found`, exit `127` |
-| `codexbar --provider zai --source api --format json --pretty` | `bash: codexbar: command not found`, exit `127` |
-| `codexbar --provider openrouter --source api --format json --pretty` | `bash: codexbar: command not found`, exit `127` |
+The actual invocation is:
 
-Blocker: live provider command validation cannot proceed until CodexBar CLI is installed/configured on the target machine.
+```bash
+codexbar usage --provider <id> --source <type> --format json
+```
 
-## Fixture sources
+The `usage` subcommand is implicit when omitted, so
 
-Sanitized structural fixtures were added under `tests/fixtures/codexbar/` from upstream CodexBar schema/test inspection, not from live secrets:
+```bash
+codexbar --provider <id> --source <type> --format json
+```
 
-- `config_dump.json`
-- `codex_cli_success.json`
-- `claude_cli_success.json`
-- `zai_api_success.json`
-- `openrouter_api_success.json`
-- `representative_error.json`
+also works. Our adapter uses the implicit form and that is fine — both routes
+are stable in this CodexBar build.
 
-Sanitization applied:
+`codexbar --version` prints just `CodexBar` (no version string in this binary).
+The per-provider payload exposes `version` (e.g. `"0.123.0"` for codex,
+`"2.1.119"` for claude — that is the upstream CLI version, not CodexBar's).
 
-- email identity uses `user@example.com`
-- no org IDs/account IDs
-- no API keys/tokens/cookies/auth headers
-- error fixture uses `[REDACTED]`
+## CodexBar config schema gotcha
+
+`~/.codexbar/config.json` requires the **full** provider list. Writing only the
+subset of providers you want enabled fails with:
+
+```
+"Failed to decode CodexBar config: The operation could not be completed. The data is missing."
+```
+
+Working minimum:
+
+```json
+{
+  "version": 1,
+  "providers": [
+    {"id": "codex", "enabled": true},
+    {"id": "claude", "enabled": true},
+    ... // every provider id from `codexbar config dump --format json`
+    {"id": "openrouter", "enabled": true}
+  ]
+}
+```
+
+Discovery via `codexbar config dump --format json` always emits the canonical
+list, so it is safe to clone-and-edit that output.
+
+## Per-provider payload findings
+
+### codex (cli)
+- Returns `version`, `usage.identity` with `accountEmail`/`loginMethod`/`providerID`,
+  `usage.primary` and `usage.secondary` quota windows, plus a `credits` block.
+- Reset descriptions use U+202F NARROW NO-BREAK SPACE (`"10:34 PM"`).
+  Display layer should treat as a regular space.
+
+### claude (cli)
+- **Slow.** ~15s per fetch (live HTTP roundtrip to claude.ai). The original 10s
+  per-call timeout was too tight; bumped to 30s default in `runner.py`.
+- Live `usage.primary` lacks `resetsAt` and `resetDescription` — only
+  `usedPercent` and `windowMinutes`. Normalizer must tolerate.
+- `usage.identity` only contains `providerID` (no email).
+- `source` field echoes back as `"claude"` (not `"cli"`).
+
+### zai (api)
+- Three quota windows: 1-week / 1-minute / 5-hours, in `primary`/`secondary`/`tertiary`.
+- **`secondary` omits `windowMinutes`** entirely — only `resetDescription:
+  "1 minute window"`. Pinned by `test_normalizer_handles_zai_secondary_without_window_minutes`.
+- `usedPercent` may be float-noisy (`1.0999999999999999`).
+- Identity is bare (only `providerID`).
+- Auth via `Z_AI_API_KEY` env var works; no `~/.codexbar/config.json` entry needed beyond enabling the provider.
+
+### openrouter (api)
+- No quota windows — `primary`/`secondary`/`tertiary` are all null.
+- `usage.openRouterUsage` block: `balance`, `totalCredits`, `totalUsage`,
+  `keyUsage`, `rateLimit`, `usedPercent`.
+- Normalizer emits two credit meters: "OpenRouter Balance" (account-wide) and
+  "OpenRouter Key Quota" (per-key usage). Real `keyUsage` is populated; old
+  fixture had it null.
+- `rateLimit.requests: -1` indicates unlimited.
+- `loginMethod` carries the human-readable balance string (`"Balance: $3.49"`).
+- Auth via `OPENROUTER_API_KEY` env var.
 
 ## Phase 1 implementation
 
 Implemented:
 
 - Python package skeleton under `src/neon_codexbar/`
-- source-checkout shim for `python3 -m neon_codexbar` before editable install
-- CodexBar adapter modules:
-  - `runner.py`
-  - `discovery.py`
-  - `source_policy.py`
-  - `normalizer.py`
-- CLI commands:
-  - `neon-codexbar --version`
-  - `neon-codexbar discover --json`
-  - `neon-codexbar fetch --json`
-  - `neon-codexbar diagnose --json`
+- Source-checkout shim for `python3 -m neon_codexbar` before editable install
+- CodexBar adapter modules: `runner.py`, `discovery.py`, `source_policy.py`, `normalizer.py`
+- CLI commands: `--version`, `discover --json`, `fetch --json`, `diagnose --json`
 - UI-only config model; no provider secrets stored by neon-codexbar
-- redacted diagnostics
-- pytest unit coverage for source policy, discovery, normalization, diagnostics, and CLI fixture fetch
+- Redacted diagnostics
+- 18 pytest unit tests (source policy, discovery, normalization, diagnostics, CLI fixture fetch)
+- Per-call subprocess timeout: 30s (was 10s; insufficient for claude)
 
-Source policy implemented:
+Source policy (Linux):
 
 | Provider | Source |
 |---|---|
@@ -73,48 +120,28 @@ Source policy implemented:
 | `zai` | `api` |
 | `openrouter` | `api` |
 
-Unknown providers are skipped with diagnostics. `--source auto` is never used for Linux provider fetches.
+Unknown providers are skipped with diagnostics. `--source auto` is never used.
 
 ## Verification
-
-This sandbox has `python3` but no `python` executable.
-
-Commands run:
 
 ```bash
 python3 -m ruff check .
 python3 -m pytest
 ```
 
-Results:
+Both clean. End-to-end live fetch (`python3 -m neon_codexbar fetch --json`)
+returns valid `ProviderCard` JSON for all four providers.
 
-```text
-All checks passed!
-13 passed in 0.32s
-```
+## Fixtures
 
-CLI smoke checks:
+`tests/fixtures/codexbar/*.json` are now sanitized live captures, not
+hand-built structural mocks. Sanitization applied:
 
-```bash
-python3 -m neon_codexbar --version
-python3 -m neon_codexbar discover --json
-python3 -m neon_codexbar fetch --json --fixture tests/fixtures/codexbar/openrouter_api_success.json
-python3 -m neon_codexbar diagnose --json
-```
+- codex `accountEmail` → `user@example.com`
+- no API keys, tokens, cookies, auth headers
+- error fixture unchanged shape, generic message
 
-Results:
+## Next phase
 
-- `--version` prints `neon-codexbar 0.1.0 (codexbar unavailable)`.
-- `discover --json` returns a structured `ok: false` error because CodexBar is unavailable.
-- fixture-backed `fetch --json` emits a normalized OpenRouter card with credit meter and no fake quota windows.
-- `diagnose --json` returns a redacted diagnostic bundle with `ok: false` because CodexBar is unavailable.
-
-## Blockers
-
-- CodexBar CLI unavailable on this host, so live command behavior/auth cannot be validated.
-- Live Codex, Claude, z.ai, and OpenRouter payloads could not be captured.
-- `python` is absent on PATH; use `python3` here or install/provide a `python` shim in the target dev environment.
-
-## Next recommended phase
-
-Install or provide CodexBar CLI on the KDE target machine, rerun Phase 0 command validation, and replace/augment structural fixtures with sanitized live fixtures where safe. After live CLI validation passes, proceed to daemon/snapshot work before QML/Plasma rendering.
+Phase 2 prerequisites are met. See `plans/next-steps-user-config.md` for the
+ordered next steps.

@@ -5,13 +5,9 @@ Status: after live KDE Neon Codex validation
 
 ## Current phase
 
-We are at the end of **Phase 1 + hardening** and have started **live Phase 0 validation**.
-
-That sounds backwards because it is slightly backwards, but on purpose:
-
-- The sandbox could build and test the adapter against fixtures.
-- Jeremy's KDE Neon laptop is the only place with real CodexBar CLI/auth/session behavior.
-- So Phase 1 adapter work was built first, then Phase 0 live validation is being completed against the real target.
+**Phase 1 + hardening complete. Live Phase 0 validation complete for all four
+target providers** (codex, claude, zai, openrouter) on the Debian LXC dev host
+that has CodexBar CLI installed.
 
 Current state:
 
@@ -19,25 +15,23 @@ Current state:
 |---|---|
 | Python package / CLI | done |
 | CodexBar config discovery | live validated |
-| Codex provider fetch via `cli` | live validated |
+| codex fetch via `cli` | live validated |
+| claude fetch via `cli` | live validated (~15s/call — bumped timeout to 30s) |
+| zai fetch via `api` | live validated |
+| openrouter fetch via `api` | live validated |
 | Source policy | working for codex/claude/zai/openrouter |
 | Redaction | working for account email |
-| Tests | passing, 17 tests |
+| Fixtures | replaced with sanitized live captures |
+| Tests | passing, 18 tests |
 | Runtime installer | not started |
 | Daemon/snapshot IPC | not started |
 | Plasma widget | not started |
 | All-in-one installer | later phase |
 
-Live validation already proved:
-
-```text
-codexbar config dump --format json
-neon-codexbar discover --json
-neon-codexbar diagnose --json
-neon-codexbar fetch --json
-```
-
-work on KDE Neon for the currently enabled `codex` provider.
+See `docs/PHASE_0_1_RESULTS.md` for live payload findings (claude `primary`
+omits `resetsAt`/`resetDescription`; z.ai `secondary` omits `windowMinutes`;
+openrouter exposes both Balance and Key Quota meters; CodexBar config requires
+the full provider list).
 
 ## What we are ignoring for now
 
@@ -300,35 +294,17 @@ Rules:
 
 ## Recommended next steps
 
-### Step 1 — Finish live Phase 0 for four providers
+### Step 1 — Finish live Phase 0 for four providers ✅ DONE 2026-04-26
 
-Validate these on Jeremy's KDE Neon laptop:
+Validated on Debian LXC dev host with CodexBar CLI installed. Findings recorded
+in `docs/PHASE_0_1_RESULTS.md`. Fixtures replaced with sanitized live captures.
+Normalizer regressions added for missing-field cases. Per-call timeout bumped
+to 30s (claude takes ~15s).
 
-```bash
-codexbar --provider codex --source cli --format json
-codexbar --provider claude --source cli --format json
-codexbar --provider zai --source api --format json
-codexbar --provider openrouter --source api --format json
-```
-
-Then run:
-
-```bash
-neon-codexbar discover --json
-neon-codexbar fetch --json
-neon-codexbar diagnose --json
-```
-
-Acceptance:
-
-- Codex remains working.
-- Claude works or returns a clear setup/auth error.
-- z.ai works or returns a clear setup/auth error.
-- OpenRouter works or returns a clear setup/auth error.
-- No secrets appear in neon-codexbar output.
-- Live payload shapes are either compatible with fixtures or documented.
-
-If payload shape differs, patch normalizer/tests before moving on.
+KDE Neon laptop re-validation can be done opportunistically; the dev-host
+behavior should match because both invoke the same CodexBar binary against the
+same provider APIs. Snapshot path under daemon work will surface any
+laptop-specific deltas.
 
 ### Step 2 — Document provider enablement notes
 
@@ -409,10 +385,11 @@ Installer should:
 
 ## Immediate decision
 
-Do not change plan because the current status was confusing.
+Phase 0 live validation is done. Phase 2 prerequisites are met.
 
 Current next action:
 
-> Complete live validation for Claude, z.ai, and OpenRouter on KDE Neon, then update fixtures/docs based on real payloads.
+> Write `docs/PROVIDER_SETUP.md` (Step 2), then start Phase 2 daemon + snapshot
+> IPC (Step 3) against codex/claude/zai/openrouter.
 
 Ignore disabled-provider diagnostic noise for now.

@@ -17,9 +17,9 @@ def test_normalizer_handles_codex_primary_secondary_windows() -> None:
 
     assert card.provider_id == "codex"
     assert card.display_name == "Codex"
-    assert card.source == "cli"
+    assert card.source == "codex-cli"
     assert [window.id for window in card.quota_windows] == ["primary", "secondary"]
-    assert card.quota_windows[0].used_percent == 12.0
+    assert card.quota_windows[0].used_percent == 55.0
     assert card.quota_windows[1].window_minutes == 10080
     assert card.credit_meters[0].balance == 42.0
     assert card.error_message is None
@@ -31,8 +31,12 @@ def test_normalizer_handles_claude_primary_secondary_windows() -> None:
     assert card.provider_id == "claude"
     assert card.display_name == "Claude Code"
     assert [window.id for window in card.quota_windows] == ["primary", "secondary"]
-    assert card.quota_windows[0].reset_description == "3pm (America/Phoenix)"
+    # Live claude primary lacks resetsAt and resetDescription entirely.
+    assert card.quota_windows[0].reset_description is None
+    assert card.quota_windows[0].resets_at is None
+    assert card.quota_windows[0].window_minutes == 300
     assert card.quota_windows[1].resets_at is not None
+    assert card.quota_windows[1].window_minutes == 10080
 
 
 def test_normalizer_handles_zai_primary_secondary_tertiary_windows() -> None:
@@ -53,13 +57,29 @@ def test_normalizer_handles_openrouter_credit_balance_without_fake_windows() -> 
 
     assert card.provider_id == "openrouter"
     assert card.quota_windows == []
-    assert len(card.credit_meters) == 1
-    meter = card.credit_meters[0]
-    assert meter.label == "OpenRouter Balance"
-    assert meter.balance == 74.5
-    assert meter.used == 25.5
-    assert meter.total == 100.0
-    assert meter.used_percent == 25.5
+    # Live OpenRouter exposes both an account balance meter and a per-key usage meter.
+    assert len(card.credit_meters) == 2
+    balance = card.credit_meters[0]
+    assert balance.label == "OpenRouter Balance"
+    assert balance.balance == 3.48599225
+    assert balance.used == 1.51400775
+    assert balance.total == 5.0
+    assert balance.used_percent == 30.280154999999997
+    key_meter = card.credit_meters[1]
+    assert key_meter.label == "OpenRouter Key Quota"
+    assert key_meter.used == 1.09768035
+
+
+def test_normalizer_handles_zai_secondary_without_window_minutes() -> None:
+    """z.ai live payload omits windowMinutes from the secondary window."""
+
+    card = _normalize("zai_api_success.json")
+
+    secondary = next(window for window in card.quota_windows if window.id == "secondary")
+    assert secondary.window_minutes is None
+    assert secondary.reset_description == "1 minute window"
+    assert secondary.resets_at is not None
+    assert secondary.used_percent == 1.0999999999999999
 
 
 def test_normalizer_handles_error_payload() -> None:

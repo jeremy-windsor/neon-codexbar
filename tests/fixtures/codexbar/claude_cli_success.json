@@ -1,35 +1,24 @@
 [
   {
     "provider": "claude",
-    "account": "user@example.com",
-    "version": "2.0.69",
-    "source": "cli",
-    "status": null,
+    "source": "claude",
+    "version": "2.1.119",
     "usage": {
+      "identity": {
+        "providerID": "claude"
+      },
       "primary": {
-        "usedPercent": 2,
-        "windowMinutes": null,
-        "resetsAt": null,
-        "resetDescription": "3pm (America/Phoenix)"
+        "usedPercent": 46,
+        "windowMinutes": 300
       },
       "secondary": {
-        "usedPercent": 50,
-        "windowMinutes": 10080,
-        "resetsAt": "2026-04-28T20:41:00Z",
-        "resetDescription": null
+        "resetDescription": "Resets7am(America/Phoenix)",
+        "resetsAt": "2026-04-27T14:00:00Z",
+        "usedPercent": 26,
+        "windowMinutes": 10080
       },
       "tertiary": null,
-      "updatedAt": "2026-04-26T20:41:00Z",
-      "identity": {
-        "providerID": "claude",
-        "accountEmail": "user@example.com",
-        "accountOrganization": null,
-        "loginMethod": "max"
-      }
-    },
-    "credits": null,
-    "antigravityPlanInfo": null,
-    "openaiDashboard": null,
-    "error": null
+      "updatedAt": "2026-04-27T03:02:28Z"
+    }
   }
 ]

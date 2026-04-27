@@ -1,39 +1,35 @@
 [
   {
     "provider": "codex",
-    "account": "user@example.com",
-    "version": "1.2.3",
-    "source": "cli",
-    "status": null,
+    "source": "codex-cli",
+    "version": "0.123.0",
     "usage": {
+      "accountEmail": "user@example.com",
+      "loginMethod": "free",
+      "identity": {
+        "accountEmail": "user@example.com",
+        "loginMethod": "free",
+        "providerID": "codex"
+      },
       "primary": {
-        "usedPercent": 12,
-        "windowMinutes": 300,
-        "resetsAt": null,
-        "resetDescription": "today at 3:00 PM"
+        "resetDescription": "10:34 PM",
+        "resetsAt": "2026-04-27T05:34:27Z",
+        "usedPercent": 55,
+        "windowMinutes": 300
       },
       "secondary": {
-        "usedPercent": 25,
-        "windowMinutes": 10080,
-        "resetsAt": null,
-        "resetDescription": "Fri at 9:00 AM"
+        "resetDescription": "28 Apr 2026 at 11:23 AM",
+        "resetsAt": "2026-04-28T18:23:32Z",
+        "usedPercent": 81,
+        "windowMinutes": 10080
       },
       "tertiary": null,
-      "updatedAt": "2026-04-26T20:41:00Z",
-      "identity": {
-        "providerID": "codex",
-        "accountEmail": "user@example.com",
-        "accountOrganization": null,
-        "loginMethod": "pro"
-      }
+      "updatedAt": "2026-04-27T03:02:12Z"
     },
     "credits": {
-      "remaining": 42,
       "events": [],
-      "updatedAt": "2026-04-26T20:41:00Z"
-    },
-    "antigravityPlanInfo": null,
-    "openaiDashboard": null,
-    "error": null
+      "remaining": 42,
+      "updatedAt": "2026-04-27T03:02:12Z"
+    }
   }
 ]

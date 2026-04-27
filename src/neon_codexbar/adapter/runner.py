@@ -14,7 +14,7 @@ from neon_codexbar.config import AppConfig
 from neon_codexbar.diagnostics import redact_string
 from neon_codexbar.models import CommandResult
 
-DEFAULT_TIMEOUT_SECONDS = 10.0
+DEFAULT_TIMEOUT_SECONDS = 30.0
 
 
 class CodexBarUnavailableError(RuntimeError):

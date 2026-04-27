@@ -1,40 +1,29 @@
 [
   {
     "provider": "zai",
-    "account": null,
-    "version": null,
     "source": "api",
-    "status": null,
     "usage": {
+      "identity": {
+        "providerID": "zai"
+      },
       "primary": {
-        "usedPercent": 40,
-        "windowMinutes": 10080,
-        "resetsAt": "2026-05-03T20:41:00Z",
-        "resetDescription": null
+        "resetDescription": "1 week window",
+        "resetsAt": "2026-05-03T13:57:36Z",
+        "usedPercent": 1,
+        "windowMinutes": 10080
       },
       "secondary": {
-        "usedPercent": 10,
-        "windowMinutes": 1,
-        "resetsAt": "2026-04-26T20:42:00Z",
-        "resetDescription": null
+        "resetDescription": "1 minute window",
+        "resetsAt": "2026-05-05T13:57:36Z",
+        "usedPercent": 1.0999999999999999
       },
       "tertiary": {
-        "usedPercent": 65,
-        "windowMinutes": 300,
-        "resetsAt": "2026-04-27T01:41:00Z",
-        "resetDescription": null
+        "resetDescription": "5 hours window",
+        "resetsAt": "2026-04-27T05:00:34Z",
+        "usedPercent": 1,
+        "windowMinutes": 300
       },
-      "updatedAt": "2026-04-26T20:41:00Z",
-      "identity": {
-        "providerID": "zai",
-        "accountEmail": null,
-        "accountOrganization": null,
-        "loginMethod": null
-      }
-    },
-    "credits": null,
-    "antigravityPlanInfo": null,
-    "openaiDashboard": null,
-    "error": null
+      "updatedAt": "2026-04-27T03:02:29Z"
+    }
   }
 ]

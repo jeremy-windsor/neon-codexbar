@@ -54,4 +54,4 @@ def test_cli_fetch_json_against_fixture() -> None:
     assert payload["ok"] is True
     assert payload["cards"][0]["provider_id"] == "openrouter"
     assert payload["cards"][0]["quota_windows"] == []
-    assert payload["cards"][0]["credit_meters"][0]["balance"] == 74.5
+    assert payload["cards"][0]["credit_meters"][0]["balance"] == 3.48599225

@@ -1,39 +1,30 @@
 [
   {
     "provider": "openrouter",
-    "account": null,
-    "version": null,
     "source": "api",
-    "status": null,
     "usage": {
+      "identity": {
+        "loginMethod": "Balance: $3.49",
+        "providerID": "openrouter"
+      },
+      "loginMethod": "Balance: $3.49",
+      "openRouterUsage": {
+        "balance": 3.48599225,
+        "keyDataFetched": true,
+        "keyUsage": 1.09768035,
+        "rateLimit": {
+          "interval": "10s",
+          "requests": -1
+        },
+        "totalCredits": 5,
+        "totalUsage": 1.51400775,
+        "updatedAt": "2026-04-27T03:02:29Z",
+        "usedPercent": 30.280154999999997
+      },
       "primary": null,
       "secondary": null,
       "tertiary": null,
-      "openRouterUsage": {
-        "totalCredits": 100.0,
-        "totalUsage": 25.5,
-        "balance": 74.5,
-        "usedPercent": 25.5,
-        "keyDataFetched": true,
-        "keyLimit": null,
-        "keyUsage": null,
-        "rateLimit": {
-          "requests": 10,
-          "interval": "10s"
-        },
-        "updatedAt": "2026-04-26T20:41:00Z"
-      },
-      "updatedAt": "2026-04-26T20:41:00Z",
-      "identity": {
-        "providerID": "openrouter",
-        "accountEmail": null,
-        "accountOrganization": null,
-        "loginMethod": "Balance: $74.50"
-      }
-    },
-    "credits": null,
-    "antigravityPlanInfo": null,
-    "openaiDashboard": null,
-    "error": null
+      "updatedAt": "2026-04-27T03:02:29Z"
+    }
   }
 ]
