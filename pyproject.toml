@@ -23,6 +23,7 @@ dependencies = []
 
 [project.scripts]
 neon-codexbar = "neon_codexbar.cli:main"
+neon-codexbar-daemon = "neon_codexbar.daemon:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/neon_codexbar"]

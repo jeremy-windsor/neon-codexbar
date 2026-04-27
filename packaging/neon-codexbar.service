@@ -1,0 +1,15 @@
+[Unit]
+Description=neon-codexbar daemon (CodexBar provider snapshot writer)
+Documentation=https://github.com/jeremy-windsor/neon-codexbar
+After=plasma-plasmashell.service
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/neon-codexbar-daemon
+Restart=on-failure
+RestartSec=5
+# Snapshot path lives under $XDG_CACHE_HOME (~/.cache); no special perms needed.
+# Provider auth lives outside this unit; we never read or write API keys.
+
+[Install]
+WantedBy=default.target
