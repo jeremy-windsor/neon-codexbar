@@ -202,3 +202,115 @@ All Phase 2 acceptance boxes ticked, tests green, ruff clean, smoke run
 captured above. Status: **complete 2026-04-26**.
 
 Next: Phase 3 Plasma widget. The daemon's snapshot.json is the only contract.
+
+## GPT Phase 2 review notes — 2026-04-26
+
+Review request: read-only review of whether Phase 2 was implemented properly.
+No code changes were made during review.
+
+### Review verdict
+
+Phase 2 is substantially complete and good enough to proceed toward Phase 3,
+but the following issues should be fixed before the Plasma widget treats the
+snapshot as a stable UI contract.
+
+### Verified during review
+
+```text
+git status: clean, synced with origin/main
+HEAD: 37c2c79 feat(phase 2): refresh daemon + atomic snapshot IPC
+ruff: passed
+pytest: 32 passed
+```
+
+A local `--once` smoke run wrote a snapshot with schema version 1 and four
+cards (`claude`, `codex`, `openrouter`, `zai`). OpenRouter/z.ai errored in that
+specific shell because API-key environment variables were not injected into the
+process; that was treated as an environment/auth wiring issue, not a daemon
+architecture failure.
+
+### Must-fix before Phase 3 UI consumes snapshot.json
+
+#### 1. `snapshot.ok` semantics currently disagree with this plan
+
+The plan says `ok` means global daemon/CodexBar availability, not per-provider
+success. Current daemon behavior sets snapshot `ok=false` when any provider
+fetch fails:
+
+```python
+ok=tick.error_count == 0 and located is not None
+```
+
+That makes one bad provider key look like a global daemon/CodexBar failure.
+The widget should not have to guess whether `ok=false` means "CodexBar missing"
+or "OpenRouter burped."
+
+Recommended semantics:
+
+- `snapshot.ok`: daemon can locate and invoke CodexBar / global health.
+- `cards[i].error_message`: provider-specific failure.
+- Optional future field: `provider_error_count` if the UI needs a summary.
+
+#### 2. systemd user service needs a deliberate provider auth story
+
+The unit starts the daemon cleanly, but systemd user services do not reliably
+inherit interactive shell environment variables. API providers such as z.ai and
+OpenRouter need `Z_AI_API_KEY` / `OPENROUTER_API_KEY` or a CodexBar-supported
+auth/config path.
+
+Do **not** store secrets in neon-codexbar config. Keep auth owned by CodexBar,
+the user environment, or a user-owned systemd drop-in.
+
+Accepted options to document/standardize later:
+
+```bash
+systemctl --user import-environment Z_AI_API_KEY OPENROUTER_API_KEY
+```
+
+or a user-owned drop-in such as:
+
+```ini
+[Service]
+Environment=Z_AI_API_KEY=...
+Environment=OPENROUTER_API_KEY=...
+```
+
+The shipped unit file should remain generic and secret-free.
+
+#### 3. provider worker exceptions should not crash the daemon
+
+`future.result()` is not wrapped. If a provider worker raises outside the normal
+`CommandResult` path, the whole tick can bubble to the daemon's top-level crash
+handler and exit. A single provider should produce an error card and diagnostic,
+not kill the daemon.
+
+Recommended behavior:
+
+- catch exceptions around each future result
+- emit provider-specific error card when possible
+- include a redacted diagnostic
+- keep the daemon alive
+
+#### 4. snapshot path config mismatch
+
+The plan says `snapshot_path` belongs in `AppConfig`; implementation supports
+`--snapshot-path` and `NEON_CODEXBAR_SNAPSHOT_PATH` instead. That is probably
+fine, but the docs and code should agree.
+
+Recommendation: keep CLI/env override for now and update the plan/docs; do not
+add more persistent config unless the widget/install flow needs it.
+
+### Not blockers
+
+- Deferred integration lifecycle test is acceptable while unit coverage and live
+  smoke exist.
+- `is_stale` after daemon death cannot be written by a dead daemon; the widget
+  should compute daemon-dead staleness from `generated_at` or file mtime.
+- Disabled-provider diagnostics are noisy but Jeremy explicitly deprioritized
+  that bug for now.
+
+### Recommendation
+
+Proceed to Phase 3 only after fixing `snapshot.ok` semantics and deciding the
+systemd/provider-env story. The exception handling and docs mismatch can be
+fixed in the same cleanup pass, but they are smaller gremlins.
