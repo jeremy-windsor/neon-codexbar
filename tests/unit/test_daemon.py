@@ -30,11 +30,15 @@ class FakeRunner:
         self._provider_payloads = provider_payloads
         self._version = version
         self.fetch_calls: list[tuple[str, str]] = []
+        self.version_calls = 0
+        self.locate_calls = 0
 
     def locate(self) -> str | None:
+        self.locate_calls += 1
         return self.codexbar_path
 
     def version(self) -> CommandResult:
+        self.version_calls += 1
         return CommandResult(
             command=["codexbar", "--version"],
             stdout=self._version,
@@ -256,6 +260,43 @@ def test_daemon_run_forever_executes_tick_then_exits_on_shutdown(snapshot_path: 
         "openrouter",
         "zai",
     }
+
+
+def test_daemon_caches_codexbar_version_after_first_probe(snapshot_path: Path) -> None:
+    """version() spawns a subprocess; only call it once per daemon lifetime."""
+
+    runner = _fake_runner_all_four()
+    daemon = Daemon(AppConfig(), runner=runner, snapshot_path=snapshot_path)
+
+    daemon.write_initial_snapshot()
+    tick = daemon.tick()
+    daemon.write_tick_snapshot(tick)
+    daemon.write_tick_snapshot(tick)
+
+    assert runner.version_calls == 1
+
+
+def test_daemon_retries_codexbar_probe_until_binary_appears(snapshot_path: Path) -> None:
+    """If CodexBar isn't present at startup, retry on the next snapshot write."""
+
+    runner = FakeRunner(
+        config_dump_payload=json.dumps({"version": 1, "providers": []}),
+        provider_payloads={},
+        binary=None,  # CodexBar missing at start
+    )
+    daemon = Daemon(AppConfig(), runner=runner, snapshot_path=snapshot_path)
+
+    daemon.write_initial_snapshot()
+    assert runner.locate_calls == 1
+    # Binary appears between writes (e.g. user installs CodexBar).
+    runner.codexbar_path = "/fake/codexbar"
+
+    daemon.write_initial_snapshot()
+    assert runner.locate_calls == 2  # retried because not yet probed
+    assert runner.version_calls == 1  # but version called once binary was found
+
+    daemon.write_initial_snapshot()
+    assert runner.version_calls == 1  # cached now
 
 
 def test_apply_staleness_marks_card_when_last_success_is_old() -> None:

@@ -321,6 +321,8 @@ fixed in the same cleanup pass, but they are smaller gremlins.
 
 ### Review fixes applied — 2026-04-27
 
+First pass (inline review subset):
+
 | # | Finding | Fix |
 |---|---|---|
 | 1 | `snapshot.ok` conflated global health with per-provider success | `daemon.write_tick_snapshot` no longer passes `ok=`; `build_snapshot` defaults to `ok = codexbar_path is not None`. New assertion in `test_daemon_tick_records_provider_error` locks the semantic. |
@@ -328,5 +330,14 @@ fixed in the same cleanup pass, but they are smaller gremlins.
 | 3 | systemd auth story undocumented | New section in `docs/PROVIDER_SETUP.md` covering three options: `systemctl --user import-environment`, user-owned 0600 drop-in, `EnvironmentFile=`. Shipped unit stays secret-free. |
 | 4 | `snapshot_path` doc/code mismatch | Open-questions item updated to match implementation (CLI/env override only, no `AppConfig` field). |
 
-Tests: 33 passing. Ruff: clean. Daemon restarted on the dev LXC against the
+Second pass after reading the full GPT review file (`docs/GPT_PHASE_0_2_PEER_REVIEW.md`):
+
+| # | Item | Decision | Notes |
+|---|---|---|---|
+| Final-2 | Add `provider_error_count` on snapshot root | **Skip** | Reviewer marked "optional." Widget can compute from `cards.filter(c => c.error_message).length` in 1 line; adding it duplicates data already present and expands contract surface for no real benefit. |
+| Should-4 | Cache CodexBar `locate()`+`version()` | **Done** | `Daemon._codexbar_metadata()` probes once and caches; retries until binary appears if missing at startup. New tests `test_daemon_caches_codexbar_version_after_first_probe` and `test_daemon_retries_codexbar_probe_until_binary_appears`. |
+| Should-5 | Wire `provider_overrides[id].display_name` from config | **Defer to Phase 5** | Reviewer explicitly said "not Phase 2 blocker." Phase 5 ("UX polish" per master plan §15) is the right home. Doing it now requires threading `AppConfig` through `normalize_json` (currently config-free) plus precedence rules — cleaner with the rest of the settings UI work. The config field already exists; nothing's breaking. |
+| Final-4 | `docs/DAEMON_CONTRACT.md` before Phase 3 QML | **Done** | Single source of truth: file location, schema, semantic rules (ok=global, two staleness cases), sort order, manual refresh, forward-compat rules, ownership matrix. |
+
+Tests: 35 passing. Ruff: clean. Daemon restarted on the dev LXC against the
 fix; `tick 1 providers=4 ok=4 errors=0` and snapshot `ok=true`.

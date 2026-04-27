@@ -157,6 +157,12 @@ class Daemon:
         self.refresh_event = threading.Event()
         self.tick_count = 0
         self.refresh_sentinel = self.snapshot_path.parent / "refresh.touch"
+        # CodexBar binary metadata is cached after the first successful probe so we
+        # don't spawn `codexbar --version` on every snapshot write. Restart the
+        # daemon to pick up a CodexBar upgrade.
+        self._codexbar_path: str | None = None
+        self._codexbar_version: str | None = None
+        self._codexbar_probed = False
 
     # ----- one tick -------------------------------------------------------
 
@@ -242,15 +248,34 @@ class Daemon:
 
     # ----- snapshot writing -----------------------------------------------
 
-    def write_initial_snapshot(self) -> Path:
-        """Write a placeholder so the widget never sees a missing file."""
+    def _codexbar_metadata(self) -> tuple[str | None, str | None]:
+        """Return cached (path, version), probing CodexBar once on first call.
 
+        We cache because `runner.version()` spawns a subprocess and the answer
+        does not change for the lifetime of the daemon. Restart to pick up an
+        upgrade.
+        """
+
+        if self._codexbar_probed:
+            return self._codexbar_path, self._codexbar_version
         located = self.runner.locate()
-        version = None
+        version: str | None = None
         if located is not None:
             version_result = self.runner.version()
             if version_result.ok:
                 version = version_result.stdout.strip() or None
+        # Only mark probed once we know the binary exists; that way a daemon
+        # started before CodexBar was installed will retry on the next tick.
+        if located is not None:
+            self._codexbar_probed = True
+        self._codexbar_path = located
+        self._codexbar_version = version
+        return located, version
+
+    def write_initial_snapshot(self) -> Path:
+        """Write a placeholder so the widget never sees a missing file."""
+
+        located, version = self._codexbar_metadata()
         payload = build_snapshot(
             cards=[],
             diagnostics=["initial: refresh in progress"],
@@ -262,12 +287,7 @@ class Daemon:
     def write_tick_snapshot(self, tick: TickResult) -> Path:
         """Persist a completed tick's cards and diagnostics."""
 
-        located = self.runner.locate()
-        version = None
-        if located is not None:
-            version_result = self.runner.version()
-            if version_result.ok:
-                version = version_result.stdout.strip() or None
+        located, version = self._codexbar_metadata()
         # `snapshot.ok` reflects global daemon/CodexBar health only.
         # Per-provider failures live on cards[i].error_message; conflating the two
         # would make a single bad provider look like a global outage to the widget.
