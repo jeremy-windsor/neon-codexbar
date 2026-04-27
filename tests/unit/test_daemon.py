@@ -156,20 +156,68 @@ def test_daemon_initial_snapshot_is_placeholder(snapshot_path: Path) -> None:
 
 
 def test_daemon_tick_records_provider_error(tmp_path: Path) -> None:
+    snapshot = tmp_path / "snapshot.json"
     runner = FakeRunner(
         config_dump_payload=json.dumps(
             {"version": 1, "providers": [{"id": "codex", "enabled": True}]}
         ),
         provider_payloads={},  # codex fetch will fail
     )
-    daemon = Daemon(AppConfig(), runner=runner, snapshot_path=tmp_path / "snapshot.json")
+    daemon = Daemon(AppConfig(), runner=runner, snapshot_path=snapshot)
 
     tick = daemon.tick()
+    daemon.write_tick_snapshot(tick)
 
     assert tick.fetch_count == 1
     assert tick.error_count == 1
     assert tick.cards[0].provider_id == "codex"
     assert tick.cards[0].error_message is not None
+
+    # snapshot.ok is global health, not per-provider success.
+    payload = json.loads(snapshot.read_text(encoding="utf-8"))
+    assert payload["ok"] is True
+    assert payload["cards"][0]["error_message"] is not None
+
+
+class _ExplodingRunner(FakeRunner):
+    """Runner whose fetch_provider raises — simulating a bug in _fetch_one."""
+
+    def fetch_provider(self, provider_id: str, source: str) -> CommandResult:
+        self.fetch_calls.append((provider_id, source))
+        raise RuntimeError(f"boom from {provider_id}")
+
+
+def test_daemon_tick_survives_worker_exception(snapshot_path: Path) -> None:
+    """A worker raising must not kill the tick; it must produce an error card."""
+
+    runner = _ExplodingRunner(
+        config_dump_payload=json.dumps(
+            {
+                "version": 1,
+                "providers": [
+                    {"id": "codex", "enabled": True},
+                    {"id": "zai", "enabled": True},
+                ],
+            }
+        ),
+        provider_payloads={},
+    )
+    daemon = Daemon(AppConfig(), runner=runner, snapshot_path=snapshot_path)
+
+    tick = daemon.tick()
+    daemon.write_tick_snapshot(tick)
+
+    assert tick.fetch_count == 2
+    assert tick.error_count == 2
+    assert {c.provider_id for c in tick.cards} == {"codex", "zai"}
+    for card in tick.cards:
+        assert card.error_message is not None
+        # Diagnostic should not leak the raw exception repr verbatim through
+        # any code path that bypasses redaction.
+        assert "boom" in (card.error_message or "")
+    payload = json.loads(snapshot_path.read_text(encoding="utf-8"))
+    # Global daemon health is fine — CodexBar was located. Only providers errored.
+    assert payload["ok"] is True
 
 
 def test_daemon_run_forever_exits_immediately_when_shutdown_pre_set(snapshot_path: Path) -> None:

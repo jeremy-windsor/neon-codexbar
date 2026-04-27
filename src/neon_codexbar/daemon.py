@@ -30,6 +30,7 @@ from neon_codexbar.adapter.discovery import discover
 from neon_codexbar.adapter.normalizer import normalize_json
 from neon_codexbar.adapter.runner import CodexBarRunner
 from neon_codexbar.config import AppConfig, load_config
+from neon_codexbar.diagnostics import redact_string
 from neon_codexbar.ipc.snapshot_writer import (
     build_snapshot,
     default_snapshot_path,
@@ -195,11 +196,28 @@ class Daemon:
         error_count = 0
         worker_count = min(self.max_workers, len(targets))
         with ThreadPoolExecutor(max_workers=worker_count) as pool:
-            futures = [
-                pool.submit(_fetch_one, self.runner, entry, attempted_at) for entry in targets
-            ]
-            for future in as_completed(futures):
-                _entry, fetched_cards, diagnostic = future.result()
+            future_to_entry = {
+                pool.submit(_fetch_one, self.runner, entry, attempted_at): entry
+                for entry in targets
+            }
+            for future in as_completed(future_to_entry):
+                entry = future_to_entry[future]
+                try:
+                    _entry, fetched_cards, diagnostic = future.result()
+                except Exception as exc:  # noqa: BLE001 — must keep daemon alive
+                    # A bug in _fetch_one or normalize_json must not kill the
+                    # whole tick. Convert to an error card and a redacted
+                    # diagnostic; let the rest of the providers complete.
+                    LOG.exception(
+                        "provider %s worker raised; emitting error card",
+                        entry.provider_id,
+                    )
+                    message = redact_string(f"worker exception: {exc!r}")
+                    source = entry.source or "unknown"
+                    fetched_cards = [
+                        _error_card(entry.provider_id, source, message, attempted_at)
+                    ]
+                    diagnostic = f"{entry.provider_id}: {message}"
                 cards.extend(fetched_cards)
                 if diagnostic:
                     diagnostics.append(diagnostic)
@@ -250,12 +268,14 @@ class Daemon:
             version_result = self.runner.version()
             if version_result.ok:
                 version = version_result.stdout.strip() or None
+        # `snapshot.ok` reflects global daemon/CodexBar health only.
+        # Per-provider failures live on cards[i].error_message; conflating the two
+        # would make a single bad provider look like a global outage to the widget.
         payload = build_snapshot(
             cards=tick.cards,
             diagnostics=tick.diagnostics,
             codexbar_path=located,
             codexbar_version=version,
-            ok=tick.error_count == 0 and located is not None,
         )
         return write_snapshot(payload, self.snapshot_path)
 

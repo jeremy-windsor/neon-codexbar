@@ -116,6 +116,55 @@ normalizes it into two credit meters:
 `rateLimit.requests: -1` indicates unlimited. `loginMethod` carries a human
 balance string (`"Balance: $3.49"`) which the widget can display verbatim.
 
+## Headless auth for the systemd `--user` daemon
+
+`packaging/neon-codexbar.service` ships **secret-free**. systemd `--user`
+services do not reliably inherit your interactive shell environment, so
+`Z_AI_API_KEY` and `OPENROUTER_API_KEY` (and any other env-based provider
+auth) need to be made available to the unit explicitly. Pick one:
+
+**Option A — import once per login session.** Quickest, no on-disk secret.
+
+```bash
+export Z_AI_API_KEY=...
+export OPENROUTER_API_KEY=...
+systemctl --user import-environment Z_AI_API_KEY OPENROUTER_API_KEY
+systemctl --user restart neon-codexbar.service
+```
+
+The vars are only available to user services started after the import. They
+do not survive a logout — re-import on next login (or wire it into your shell
+rc + a oneshot service).
+
+**Option B — user-owned drop-in.** Persistent across logouts. Keep mode `0600`.
+
+```bash
+mkdir -p ~/.config/systemd/user/neon-codexbar.service.d
+cat > ~/.config/systemd/user/neon-codexbar.service.d/auth.conf <<'EOF'
+[Service]
+Environment=Z_AI_API_KEY=...
+Environment=OPENROUTER_API_KEY=...
+EOF
+chmod 600 ~/.config/systemd/user/neon-codexbar.service.d/auth.conf
+systemctl --user daemon-reload
+systemctl --user restart neon-codexbar.service
+```
+
+**Option C — `EnvironmentFile=`.** If you already have a sourced env file:
+
+```ini
+[Service]
+EnvironmentFile=%h/.config/neon-codexbar/auth.env
+```
+
+In all cases the secret stays user-owned and outside neon-codexbar's own
+config. Do not paste keys into `~/.config/neon-codexbar/config.json` — the
+loader will refuse the file.
+
+`codex` and `claude` providers do not need any of this — they read
+`~/.codex/` and `~/.claude/` respectively, which the daemon inherits via
+`%h`.
+
 ## Verifying neon-codexbar sees your config
 
 ```bash

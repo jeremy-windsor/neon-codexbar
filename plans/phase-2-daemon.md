@@ -119,7 +119,11 @@ which `~/.cache` always is.
 
 ## Open questions to resolve during implementation
 
-1. **Snapshot path overridable?** Yes — add `snapshot_path` to `AppConfig` (default `~/.cache/neon-codexbar/snapshot.json`), env override `NEON_CODEXBAR_SNAPSHOT_PATH`.
+1. **Snapshot path overridable?** Yes — `--snapshot-path` CLI flag and
+   `NEON_CODEXBAR_SNAPSHOT_PATH` env var override the default
+   `~/.cache/neon-codexbar/snapshot.json`. Not added to `AppConfig` because no
+   call site needs persistent config for it; revisit if the widget or installer
+   ever needs it.
 2. **Initial snapshot before first fetch finishes?** Yes — write a placeholder snapshot immediately on start (`ok: true`, `cards: []`, `diagnostics: ["initial: refresh in progress"]`) so the widget never sees "no file."
 3. **Per-tick logging volume?** One `INFO` line per tick: `tick N providers=4 ok=4 errors=0 elapsed=15.2s`. Per-provider failures: one `WARNING`. Subprocess stderr is captured in the snapshot already, not re-logged.
 4. **What if config changes mid-run?** Out of scope for Phase 2. Restart the daemon. Phase 5+ can add hot-reload.
@@ -314,3 +318,15 @@ add more persistent config unless the widget/install flow needs it.
 Proceed to Phase 3 only after fixing `snapshot.ok` semantics and deciding the
 systemd/provider-env story. The exception handling and docs mismatch can be
 fixed in the same cleanup pass, but they are smaller gremlins.
+
+### Review fixes applied — 2026-04-27
+
+| # | Finding | Fix |
+|---|---|---|
+| 1 | `snapshot.ok` conflated global health with per-provider success | `daemon.write_tick_snapshot` no longer passes `ok=`; `build_snapshot` defaults to `ok = codexbar_path is not None`. New assertion in `test_daemon_tick_records_provider_error` locks the semantic. |
+| 2 | Worker exceptions could crash daemon | `tick()` now catches around each `future.result()`, logs via `LOG.exception`, emits a redacted error card + diagnostic, keeps the daemon alive. New test `test_daemon_tick_survives_worker_exception` proves it with a runner that raises. |
+| 3 | systemd auth story undocumented | New section in `docs/PROVIDER_SETUP.md` covering three options: `systemctl --user import-environment`, user-owned 0600 drop-in, `EnvironmentFile=`. Shipped unit stays secret-free. |
+| 4 | `snapshot_path` doc/code mismatch | Open-questions item updated to match implementation (CLI/env override only, no `AppConfig` field). |
+
+Tests: 33 passing. Ruff: clean. Daemon restarted on the dev LXC against the
+fix; `tick 1 providers=4 ok=4 errors=0` and snapshot `ok=true`.
