@@ -1,7 +1,158 @@
 # Phase 3 — Plasmoid v1 Generic Renderer
 
 Date opened: 2026-04-27
-Status: planned
+Status: in progress (build dispatched)
+
+## Sandbox constraint
+
+This sandbox is a Debian LXC. **No Plasma session.** Cannot run the widget,
+see it render, verify theming visually, exercise FileWatcher live, or run
+`kpackagetool6`. All runtime acceptance happens on Jeremy's KDE Neon laptop
+via the QA checklist below. What gets done here:
+
+- structurally correct QML / metadata / install scripts
+- static cross-check against `docs/DAEMON_CONTRACT.md` field-by-field
+- generated sample snapshot fixture for QML to develop against
+- catch wrong imports (Plasma 5 vs 6)
+- peer review by an agent
+
+## Multi-agent build dispatch
+
+Two `general-purpose` agents in parallel — non-overlapping scopes. Both read
+this file, `docs/DAEMON_CONTRACT.md`, the four sample snapshots, and the
+master plan §11–§12.
+
+| Agent | Scope | Status |
+|---|---|---|
+| A | `plasmoid/` tree (8 QML files + metadata + KConfigXT schema + config dialog) | dispatched |
+| B | `packaging/install.sh`, `packaging/uninstall.sh` | dispatched |
+
+After both return, this file gets a "Build results" section, then a peer-
+review agent runs over the integrated tree.
+
+## Build results — 2026-04-27
+
+Both agents returned. 1,021 lines of QML across 8 files plus metadata, KConfigXT
+schema, config dialog, and two install scripts (5,431 + 4,339 bytes).
+
+### File inventory
+
+```
+plasmoid/
+├── metadata.json                       Plasma 6 schema, plugin id org.jeremywindsor.neon-codexbar
+└── contents/
+    ├── ui/
+    │   ├── main.qml                    45 lines  — PlasmoidItem entry, owns SnapshotStore, wires representations
+    │   ├── SnapshotStore.qml          215 lines  — sole file I/O, XHR GET, polling Timer, sentinel PUT, derived state
+    │   ├── CompactRepresentation.qml   66 lines  — colored ring + center percent; theme-only colors
+    │   ├── FullRepresentation.qml     172 lines  — header, global StatusBanners, scrollable cards, collapsible diagnostics
+    │   ├── ProviderCard.qml           138 lines  — provider-agnostic header, error banner, repeaters
+    │   ├── QuotaWindowBar.qml         102 lines  — label fallback chain, handles window_minutes=null
+    │   ├── CreditMeter.qml             98 lines  — bar when used_percent exists, text-only fallback
+    │   └── StatusBanner.qml            69 lines  — reusable severity banner (error/warning/info/stale)
+    └── config/
+        ├── main.xml                    47 lines  — KConfigXT schema (6 fields)
+        ├── config.qml                  10 lines  — ConfigModel pointing to ConfigGeneral
+        └── ConfigGeneral.qml           59 lines  — Kirigami.FormLayout with cfg_* aliases
+
+packaging/
+├── install.sh                          5,431 B   — idempotent: prereq checks, pip install, kpackagetool6 install/upgrade, systemd enable
+└── uninstall.sh                        4,339 B   — disable/stop/remove unit, plasmoid, pip; --purge opt-in for user data; refuses to touch ~/.codexbar/
+```
+
+### Pre-peer-review contract cross-check (myself)
+
+I read every QML file against `docs/DAEMON_CONTRACT.md` field by field:
+
+- `snapshot.ok` semantic respected — global setup banner triggered by `!snapshotOk || !codexbarAvailable`, distinct from per-card error banners. ✅
+- `cards[i].error_message` rendered in per-card `StatusBanner`. ✅
+- `cards[i].is_stale` dims that one card via `opacity: 0.55`. ✅
+- Daemon-dead staleness computed in `SnapshotStore` from `generated_at` vs `Date.now()`; thresholds `daemonStaleThresholdSec=600` / `daemonDeadThresholdSec=1800`. ✅
+- `cards[]` order preserved — Repeater iterates as-is, no `sort()`. ✅
+- `quota_windows[]` order preserved — Repeater iterates as-is. ✅
+- `quota_window.window_minutes=null` (z.ai secondary) handled — `QuotaWindowBar._primaryLabel` falls through to `reset_description`, and the secondary line drops the "min window" piece when minutes are missing. ✅
+- `credit_meter` text-only fallback when no `used_percent` (OpenRouter Key Quota in some snapshots) — bar `visible: _hasPct`, detail line still renders balance/used/total. ✅
+- `diagnostics[]` rendered verbatim under collapsible toggle. ✅
+- No string in any QML mentions `codex`/`claude`/`zai`/`openrouter`/`Session`/`Weekly`. ✅
+- All colors via `Kirigami.Theme.*` (positive/neutral/negative/disabled/text). ✅
+- Plasma 6 imports throughout (`org.kde.plasma.plasmoid 2.0`, `org.kde.plasma.components 3.0`, `org.kde.kirigami 2.20`). ✅
+- No subprocess spawning. ✅
+
+### Open TODOs flagged by Agent A
+
+- `XMLHttpRequest PUT` against `file://` for the sentinel may be rejected by Qt's
+  QNetworkAccessManager file scheme on some builds. If so, the refresh button
+  still works (re-reads the snapshot) and `console.log("touch sentinel TODO: ...")`
+  fires. Real-target QA item.
+- `Plasmoid.expanded` toggle on click in `CompactRepresentation` — Plasma 6
+  sometimes prefers `Plasmoid.activated()`. Real-target QA item.
+- `Qt.labs.platform.StandardPaths` is part of stock Qt 6 but plasmashell can be
+  picky about which Qt labs modules ship. If missing, swap to `XdgDirs` via
+  PlasmaCore. Real-target QA item.
+
+All three are caught by the existing `docs/QA.md`-equivalent checklist embedded
+above. No code blockers from my cross-check.
+
+## Build checklist — updated
+
+- [x] `docs/snapshot.example.json` — sanitized live capture (kept at
+      `tests/fixtures/snapshot/phase3-four-provider.json` per the file layout)
+- [x] Agent A delivered `plasmoid/` tree
+- [x] Agent B delivered `packaging/install.sh` + `uninstall.sh`
+- [x] I cross-checked QML against `DAEMON_CONTRACT.md` field-by-field
+- [x] QA checklist embedded above (no separate `docs/QA.md`; this file is the home)
+- [x] Peer-review agent verdict captured below
+- [x] Review fixes applied or deferred with reasons
+- [x] Tests + ruff still green (no Python regressions) — 35 passing
+- [ ] `git push origin main`
+
+## Peer review verdict — 2026-04-27
+
+Spawned a `general-purpose` review agent (read-only) over the integrated
+plasmoid + scripts. Verdict: **ship after fixes** — contract adherence is
+solid, blockers are Plasma 6 packaging/API correctness only catchable on a
+real session.
+
+### Triage and disposition
+
+| # | Finding | Decision |
+|---|---|---|
+| Must-1 | `KPackageStructure` may need to be inside `KPlugin` not top-level | **Defensive fix:** keep at top level AND add inside `KPlugin`. KPackage ignores unknown fields — whichever Plasma reads, it'll find. (I'm fairly sure top-level is correct on Plasma 6, but cost of dual-location is zero.) |
+| Must-2 | Explicit `MouseArea` swallows panel chrome events (drag, middle-click) | **Fixed.** Removed `MouseArea` from `CompactRepresentation.qml`; PlasmoidItem default click-to-expand handles it. |
+| Must-3 | Unused `org.kde.plasma.core` import in `main.qml` and `CompactRepresentation.qml` | **Fixed.** Removed both. |
+| Must-4 | `width: root.width - …` inside `ScrollView` content — binding loop / clipping risk | **Fixed.** Inner `ColumnLayout.width: scroll.availableWidth`, `ScrollView.contentWidth: availableWidth`. |
+| Must-5 | `Plasmoid.toolTipMainText` deprecation in Plasma 6 | **Fixed (partially).** Removed `Plasmoid.` prefix to use the PlasmoidItem property form; full migration to `toolTipItem` deferred to Phase 5 (it's just deprecation warnings, not breakage). Code comment added. |
+| Must-6 | Icon `system-help` looks like an unknown widget in Add Widgets | **Fixed.** Now `utilities-system-monitor`. |
+| Should-1 | XHR race when polling tick + manual refresh overlap | **Fixed.** Added `_loading` guard; cleared in DONE callback and the open/send catch. |
+| Should-2 | XHR PUT to `file://` may silently no-op on some Qt builds | **Documented only.** Switching to subprocess violates the architecture; agent already TODO'd. The fallback (re-read snapshot) is harmless. Real KDE QA confirms or denies. |
+| Should-3 | Raw `generated_at` ugly in popup header | **Fixed.** New `SnapshotStore.relativeAge()` formatter ("Xm ago"); wired into all three header/banner uses in FullRepresentation. |
+| Should-4 | `daemonStaleThreshold` / `daemonDeadThreshold` had no `<max>` in main.xml while ConfigGeneral SpinBoxes capped at 86400 | **Fixed.** Added `<max>86400</max>` to both. |
+| Should-5 | StatusBanner title used severity color → low contrast on warning/stale | **Fixed.** Title uses `Kirigami.Theme.textColor`; border keeps severity color. |
+| Should-6 | `_epochSeconds` silently breaks if daemon ever drops the `Z` suffix | **Fixed.** Added comment noting the contract dependency. |
+| Bonus | `pip install --user .` will fail on PEP-668 (Neon's system Python) | **Fixed.** install.sh tries clean form first; on `externally-managed-environment` error, retries with `--break-system-packages`. |
+| Nice-to-have | i18n on bare strings, accessibility, kbuildsycoca6 | **Deferred.** Phase 5 (UX polish). |
+
+### Verification
+
+```
+python3 -m ruff check .   → All checks passed
+python3 -m pytest -q      → 35 passed
+bash -n install.sh        → syntax OK
+grep -nE "\\b(claude|zai|openrouter|Session|Weekly)\\b" plasmoid/   → no matches
+```
+
+The single Must-1 item (metadata structure) is the only one I didn't
+unconditionally accept the reviewer on — defensive dual-location is the
+pragmatic call.
+
+## Status: ready for KDE Neon QA
+
+Phase 3 sandbox-side work is complete. The QA checklist embedded above runs
+on Jeremy's KDE Neon laptop. Findings from real-session QA (especially
+metadata.json acceptance, sentinel PUT behavior, theme correctness) get
+recorded back here as a "Phase 3 QA results" section before Phase 4 starts.
+
+This file is now ready to send out for additional external peer review.
 
 Build tracker for the Phase 3 deliverable from `plans/claude-neon-codexbar-plan.md` §15.
 

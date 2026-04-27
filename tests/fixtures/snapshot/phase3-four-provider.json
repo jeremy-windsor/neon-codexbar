@@ -1,0 +1,275 @@
+{
+  "cards": [
+    {
+      "credit_meters": [],
+      "display_name": "Claude Code",
+      "error_message": null,
+      "identity": {
+        "providerID": "claude"
+      },
+      "is_stale": false,
+      "last_attempt": "2026-04-27T15:21:56.892476Z",
+      "last_success": "2026-04-27T15:22:12Z",
+      "login_method": null,
+      "model_usage": [],
+      "plan": null,
+      "provider_id": "claude",
+      "quota_windows": [
+        {
+          "id": "primary",
+          "raw": {
+            "usedPercent": 61,
+            "windowMinutes": 300
+          },
+          "reset_description": null,
+          "resets_at": null,
+          "used_percent": 61.0,
+          "window_label": "Window 1",
+          "window_minutes": 300
+        },
+        {
+          "id": "secondary",
+          "raw": {
+            "resetDescription": "ResetsMay4,7am(America/Phoenix)",
+            "resetsAt": "2026-05-04T14:00:00Z",
+            "usedPercent": 0,
+            "windowMinutes": 10080
+          },
+          "reset_description": "ResetsMay4,7am(America/Phoenix)",
+          "resets_at": "2026-05-04T14:00:00Z",
+          "used_percent": 0.0,
+          "window_label": "Window 2",
+          "window_minutes": 10080
+        }
+      ],
+      "raw": null,
+      "setup_hint": null,
+      "source": "claude",
+      "version": "2.1.119"
+    },
+    {
+      "credit_meters": [
+        {
+          "balance": 0.0,
+          "currency": null,
+          "label": "Credits",
+          "raw": {
+            "events": [],
+            "remaining": 0,
+            "updatedAt": "2026-04-27T15:21:58Z"
+          },
+          "total": null,
+          "used": null,
+          "used_percent": null
+        }
+      ],
+      "display_name": "Codex",
+      "error_message": null,
+      "identity": {
+        "accountEmail": "user@example.com",
+        "loginMethod": "free",
+        "providerID": "codex"
+      },
+      "is_stale": false,
+      "last_attempt": "2026-04-27T15:21:56.892476Z",
+      "last_success": "2026-04-27T15:21:57Z",
+      "login_method": "free",
+      "model_usage": [],
+      "plan": "free",
+      "provider_id": "codex",
+      "quota_windows": [
+        {
+          "id": "primary",
+          "raw": {
+            "resetDescription": "11:02\u202fAM",
+            "resetsAt": "2026-04-27T18:02:00Z",
+            "usedPercent": 10,
+            "windowMinutes": 300
+          },
+          "reset_description": "11:02\u202fAM",
+          "resets_at": "2026-04-27T18:02:00Z",
+          "used_percent": 10.0,
+          "window_label": "Window 1",
+          "window_minutes": 300
+        },
+        {
+          "id": "secondary",
+          "raw": {
+            "resetDescription": "tomorrow, 11:23\u202fAM",
+            "resetsAt": "2026-04-28T18:23:32Z",
+            "usedPercent": 89,
+            "windowMinutes": 10080
+          },
+          "reset_description": "tomorrow, 11:23\u202fAM",
+          "resets_at": "2026-04-28T18:23:32Z",
+          "used_percent": 89.0,
+          "window_label": "Window 2",
+          "window_minutes": 10080
+        }
+      ],
+      "raw": null,
+      "setup_hint": null,
+      "source": "codex-cli",
+      "version": "0.123.0"
+    },
+    {
+      "credit_meters": [
+        {
+          "balance": 3.48599225,
+          "currency": "USD",
+          "label": "OpenRouter Balance",
+          "raw": {
+            "balance": 3.48599225,
+            "keyDataFetched": true,
+            "keyUsage": 1.09768035,
+            "rateLimit": {
+              "interval": "10s",
+              "requests": -1
+            },
+            "totalCredits": 5,
+            "totalUsage": 1.51400775,
+            "updatedAt": "2026-04-27T15:21:57Z",
+            "usedPercent": 30.280154999999997
+          },
+          "total": 5.0,
+          "used": 1.51400775,
+          "used_percent": 30.280154999999997
+        },
+        {
+          "balance": null,
+          "currency": "USD",
+          "label": "OpenRouter Key Quota",
+          "raw": {
+            "balance": 3.48599225,
+            "keyDataFetched": true,
+            "keyUsage": 1.09768035,
+            "rateLimit": {
+              "interval": "10s",
+              "requests": -1
+            },
+            "totalCredits": 5,
+            "totalUsage": 1.51400775,
+            "updatedAt": "2026-04-27T15:21:57Z",
+            "usedPercent": 30.280154999999997
+          },
+          "total": null,
+          "used": 1.09768035,
+          "used_percent": null
+        }
+      ],
+      "display_name": "OpenRouter",
+      "error_message": null,
+      "identity": {
+        "loginMethod": "Balance: $3.49",
+        "providerID": "openrouter"
+      },
+      "is_stale": false,
+      "last_attempt": "2026-04-27T15:21:56.892476Z",
+      "last_success": "2026-04-27T15:21:57Z",
+      "login_method": "Balance: $3.49",
+      "model_usage": [],
+      "plan": null,
+      "provider_id": "openrouter",
+      "quota_windows": [],
+      "raw": null,
+      "setup_hint": null,
+      "source": "api",
+      "version": null
+    },
+    {
+      "credit_meters": [],
+      "display_name": "Z.ai",
+      "error_message": null,
+      "identity": {
+        "providerID": "zai"
+      },
+      "is_stale": false,
+      "last_attempt": "2026-04-27T15:21:56.892476Z",
+      "last_success": "2026-04-27T15:21:57Z",
+      "login_method": null,
+      "model_usage": [],
+      "plan": null,
+      "provider_id": "zai",
+      "quota_windows": [
+        {
+          "id": "primary",
+          "raw": {
+            "resetDescription": "1 week window",
+            "resetsAt": "2026-05-03T13:57:36Z",
+            "usedPercent": 1,
+            "windowMinutes": 10080
+          },
+          "reset_description": "1 week window",
+          "resets_at": "2026-05-03T13:57:36Z",
+          "used_percent": 1.0,
+          "window_label": "Window 1",
+          "window_minutes": 10080
+        },
+        {
+          "id": "secondary",
+          "raw": {
+            "resetDescription": "1 minute window",
+            "resetsAt": "2026-05-05T13:57:36Z",
+            "usedPercent": 1.0999999999999999
+          },
+          "reset_description": "1 minute window",
+          "resets_at": "2026-05-05T13:57:36Z",
+          "used_percent": 1.0999999999999999,
+          "window_label": "Window 2",
+          "window_minutes": null
+        },
+        {
+          "id": "tertiary",
+          "raw": {
+            "resetDescription": "5 hours window",
+            "resetsAt": "2026-04-27T17:00:38Z",
+            "usedPercent": 1,
+            "windowMinutes": 300
+          },
+          "reset_description": "5 hours window",
+          "resets_at": "2026-04-27T17:00:38Z",
+          "used_percent": 1.0,
+          "window_label": "Window 3",
+          "window_minutes": 300
+        }
+      ],
+      "raw": null,
+      "setup_hint": null,
+      "source": "api",
+      "version": null
+    }
+  ],
+  "codexbar": {
+    "available": true,
+    "path": "/home/claude/.local/bin/CodexBarCLI",
+    "version": "CodexBar"
+  },
+  "diagnostics": [
+    "Provider 'cursor' is not in neon-codexbar Linux source policy; skipping instead of guessing --source auto.",
+    "Provider 'opencode' is not in neon-codexbar Linux source policy; skipping instead of guessing --source auto.",
+    "Provider 'opencodego' is not in neon-codexbar Linux source policy; skipping instead of guessing --source auto.",
+    "Provider 'alibaba' is not in neon-codexbar Linux source policy; skipping instead of guessing --source auto.",
+    "Provider 'factory' is not in neon-codexbar Linux source policy; skipping instead of guessing --source auto.",
+    "Provider 'gemini' is not in neon-codexbar Linux source policy; skipping instead of guessing --source auto.",
+    "Provider 'antigravity' is not in neon-codexbar Linux source policy; skipping instead of guessing --source auto.",
+    "Provider 'copilot' is not in neon-codexbar Linux source policy; skipping instead of guessing --source auto.",
+    "Provider 'minimax' is not in neon-codexbar Linux source policy; skipping instead of guessing --source auto.",
+    "Provider 'kimi' is not in neon-codexbar Linux source policy; skipping instead of guessing --source auto.",
+    "Provider 'kilo' is not in neon-codexbar Linux source policy; skipping instead of guessing --source auto.",
+    "Provider 'kiro' is not in neon-codexbar Linux source policy; skipping instead of guessing --source auto.",
+    "Provider 'vertexai' is not in neon-codexbar Linux source policy; skipping instead of guessing --source auto.",
+    "Provider 'augment' is not in neon-codexbar Linux source policy; skipping instead of guessing --source auto.",
+    "Provider 'jetbrains' is not in neon-codexbar Linux source policy; skipping instead of guessing --source auto.",
+    "Provider 'kimik2' is not in neon-codexbar Linux source policy; skipping instead of guessing --source auto.",
+    "Provider 'amp' is not in neon-codexbar Linux source policy; skipping instead of guessing --source auto.",
+    "Provider 'ollama' is not in neon-codexbar Linux source policy; skipping instead of guessing --source auto.",
+    "Provider 'synthetic' is not in neon-codexbar Linux source policy; skipping instead of guessing --source auto.",
+    "Provider 'warp' is not in neon-codexbar Linux source policy; skipping instead of guessing --source auto.",
+    "Provider 'perplexity' is not in neon-codexbar Linux source policy; skipping instead of guessing --source auto.",
+    "Provider 'abacus' is not in neon-codexbar Linux source policy; skipping instead of guessing --source auto.",
+    "Provider 'mistral' is not in neon-codexbar Linux source policy; skipping instead of guessing --source auto."
+  ],
+  "generated_at": "2026-04-27T15:22:12.774123Z",
+  "ok": true,
+  "schema_version": 1
+}

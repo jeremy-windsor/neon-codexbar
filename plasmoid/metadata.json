@@ -1,0 +1,17 @@
+{
+  "KPackageStructure": "Plasma/Applet",
+  "KPlugin": {
+    "Id": "org.jeremywindsor.neon-codexbar",
+    "KPackageStructure": "Plasma/Applet",
+    "Name": "neon-codexbar",
+    "Description": "AI provider usage in your panel (powered by CodexBar)",
+    "Icon": "utilities-system-monitor",
+    "Authors": [{"Name": "Jeremy Windsor"}],
+    "Category": "System Information",
+    "Version": "0.1.0",
+    "License": "MIT"
+  },
+  "X-Plasma-API-Minimum-Version": "6.0",
+  "X-Plasma-API": "declarativeappletscript",
+  "X-Plasma-MainScript": "ui/main.qml"
+}

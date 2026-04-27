@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  KConfigXT schema for neon-codexbar plasmoid.
+  Field defaults match docs/DAEMON_CONTRACT.md:
+    - empty snapshotPath means resolve to $HOME/.cache/neon-codexbar/snapshot.json at runtime
+    - 600s warning / 1800s dead matches the 2x and 6x of the daemon's 300s default tick
+-->
+<kcfg xmlns="http://www.kde.org/standards/kcfg/1.0"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.kde.org/standards/kcfg/1.0
+                          http://www.kde.org/standards/kcfg/1.0/kcfg.xsd">
+    <kcfgfile name=""/>
+    <group name="General">
+        <entry name="snapshotPath" type="String">
+            <label>Path to snapshot.json (empty uses default $HOME/.cache/neon-codexbar/snapshot.json)</label>
+            <default></default>
+        </entry>
+        <entry name="warningThreshold" type="Int">
+            <label>Usage percent that triggers a warning color</label>
+            <default>70</default>
+            <min>1</min>
+            <max>100</max>
+        </entry>
+        <entry name="criticalThreshold" type="Int">
+            <label>Usage percent that triggers the critical color</label>
+            <default>90</default>
+            <min>1</min>
+            <max>100</max>
+        </entry>
+        <entry name="daemonStaleThreshold" type="Int">
+            <label>Seconds before a snapshot is considered stale (suspicious)</label>
+            <default>600</default>
+            <min>30</min>
+            <max>86400</max>
+        </entry>
+        <entry name="daemonDeadThreshold" type="Int">
+            <label>Seconds before the daemon is considered dead</label>
+            <default>1800</default>
+            <min>60</min>
+            <max>86400</max>
+        </entry>
+        <entry name="pollingInterval" type="Int">
+            <label>Polling fallback interval in seconds</label>
+            <default>5</default>
+            <min>1</min>
+            <max>300</max>
+        </entry>
+    </group>
+</kcfg>
