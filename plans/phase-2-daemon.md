@@ -14,9 +14,7 @@ Plasma widget can watch. No QML in this phase. No installer in this phase.
 
 ## Acceptance criteria (from master plan)
 
-- [x] `systemctl --user start neon-codexbar` runs cleanly *(deferred until
-  install scripts land — verified via `python3 -m neon_codexbar.daemon` in
-  the meantime)*
+- [x] `systemctl --user start neon-codexbar` runs cleanly
 - [x] `~/.cache/neon-codexbar/snapshot.json` updates every N seconds
 - [x] `journalctl --user -u neon-codexbar` shows clean logs *(equivalent: stderr
   log lines are clean and structured, suitable for journald capture)*
@@ -125,6 +123,44 @@ which `~/.cache` always is.
 2. **Initial snapshot before first fetch finishes?** Yes — write a placeholder snapshot immediately on start (`ok: true`, `cards: []`, `diagnostics: ["initial: refresh in progress"]`) so the widget never sees "no file."
 3. **Per-tick logging volume?** One `INFO` line per tick: `tick N providers=4 ok=4 errors=0 elapsed=15.2s`. Per-provider failures: one `WARNING`. Subprocess stderr is captured in the snapshot already, not re-logged.
 4. **What if config changes mid-run?** Out of scope for Phase 2. Restart the daemon. Phase 5+ can add hot-reload.
+
+## systemd --user install (2026-04-26, dev LXC)
+
+```bash
+pip install --user --force-reinstall --no-deps -e .
+mkdir -p ~/.config/systemd/user
+cp packaging/neon-codexbar.service ~/.config/systemd/user/
+# Provider keys via drop-in (still owned by user, 0600), not the unit itself:
+mkdir -p ~/.config/systemd/user/neon-codexbar.service.d
+cat > ~/.config/systemd/user/neon-codexbar.service.d/dev-env.conf <<'EOF'
+[Service]
+Environment=Z_AI_API_KEY=...
+Environment=OPENROUTER_API_KEY=...
+EOF
+chmod 600 ~/.config/systemd/user/neon-codexbar.service.d/dev-env.conf
+systemctl --user daemon-reload
+systemctl --user enable --now neon-codexbar.service
+```
+
+Verified:
+
+```
+Active: active (running) since Sun 2026-04-26 20:28:13 MST
+Loaded: loaded (...neon-codexbar.service; enabled; preset: enabled)
+journalctl --user -u neon-codexbar:
+  daemon starting: snapshot=~/.cache/neon-codexbar/snapshot.json refresh_interval=300s
+  tick 1 providers=4 ok=4 errors=0 elapsed=16.1s
+~/.cache/neon-codexbar/snapshot.json: mode 0600, schema_version 1, 4 cards, no errors
+```
+
+Provider auth still lives outside neon-codexbar — the systemd drop-in is the
+recommended place for headless API keys (or the user's shell rc, or any other
+CodexBar-supported location). The unit file itself stays generic and shippable.
+
+Heads-up: claude fetches spawn the full claude CLI process tree (node, bun,
+MCP servers), so peak memory during a claude tick is ~500MB on this host.
+Steady-state between ticks is much lower. Not a Phase 2 blocker; flag for
+Phase 5+ if it bothers anyone.
 
 ## Smoke run results (2026-04-26)
 
