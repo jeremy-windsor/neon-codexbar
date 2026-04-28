@@ -25,6 +25,7 @@ PlasmoidItem {
     preferredRepresentation: compactRepresentation
     compactRepresentation: CompactRepresentation {
         store: root.snapshotStore
+        plasmoidItem: root
     }
     fullRepresentation: FullRepresentation {
         store: root.snapshotStore
