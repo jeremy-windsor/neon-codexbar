@@ -64,7 +64,7 @@ Item {
             if (!store) return "";
             if (store.worstState === "missing" || store.worstState === "error") return "!";
             if (!store.cards || store.cards.length === 0) return "-";
-            return Math.round(store.maxUsagePercent) + "";
+            return Math.round(store.trayUsagePercent) + "";
         }
         color: ringColor
         font.pixelSize: Math.max(8, Math.round(ring.width / 2.6))

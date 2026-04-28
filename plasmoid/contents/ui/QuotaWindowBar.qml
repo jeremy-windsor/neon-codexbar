@@ -42,7 +42,7 @@ ColumnLayout {
         // Avoid duplicating the description when window_label was empty and we
         // already used reset_description as the primary label.
         var rd = window.reset_description || "";
-        var ra = window.resets_at || "";
+        var ra = _formatReset(window.resets_at || "");
         var parts = [];
         if (rd && _primaryLabel !== rd) parts.push(rd);
         else if (rd && _primaryLabel === rd) {
@@ -50,6 +50,13 @@ ColumnLayout {
         }
         if (ra) parts.push("resets " + ra);
         return parts.join(" • ");
+    }
+
+    function _formatReset(iso) {
+        if (!iso || iso.length === 0) return "";
+        var d = new Date(iso);
+        if (isNaN(d.getTime())) return iso;
+        return d.toLocaleString(Qt.locale(), Locale.ShortFormat);
     }
 
     RowLayout {

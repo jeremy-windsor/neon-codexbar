@@ -27,6 +27,9 @@ QtObject {
     property int daemonStaleThresholdSec: 600
     property int daemonDeadThresholdSec: 1800
     property int pollingInterval: 5
+    property string providerOrder: ""          // comma-separated provider ids
+    property string trayProvider: ""           // provider id when trayMode=selected-provider
+    property string trayMode: "highest-usage"  // highest-usage | selected-provider
 
     // Qt.labs.platform.StandardPaths gives us the home directory portably.
     readonly property string _homeDir: {
@@ -61,6 +64,7 @@ QtObject {
     property string codexbarVersion: ""
     property string generatedAt: ""
     property var cards: []
+    property var displayCards: []
     property var diagnostics: []
     property string readError: ""
 
@@ -72,6 +76,8 @@ QtObject {
     property bool daemonStaleWarning: false
     property bool daemonDeadStale: false
     property real maxUsagePercent: 0.0
+    property real trayUsagePercent: 0.0
+    property string trayLabel: "max"
     property string worstState: "missing"  // ok | warning | critical | error | stale | missing
 
     function _toFileUrl(absPath) {
@@ -103,12 +109,52 @@ QtObject {
         return Math.floor(deltaSec / 86400) + "d ago";
     }
 
+    function _providerMaxPercent(card) {
+        if (!card) return 0.0;
+        var maxPct = 0.0;
+        var qws = card.quota_windows || [];
+        for (var i = 0; i < qws.length; ++i) {
+            var p = qws[i].used_percent;
+            if (typeof p === "number" && !isNaN(p) && p > maxPct) maxPct = p;
+        }
+        var cms = card.credit_meters || [];
+        for (var j = 0; j < cms.length; ++j) {
+            var cp = cms[j].used_percent;
+            if (typeof cp === "number" && !isNaN(cp) && cp > maxPct) maxPct = cp;
+        }
+        return maxPct;
+    }
+
+    function _orderedCards(sourceCards) {
+        var items = sourceCards ? sourceCards.slice(0) : [];
+        if (!providerOrder || providerOrder.trim().length === 0) return items;
+
+        var ranks = {};
+        var ids = providerOrder.split(",");
+        for (var i = 0; i < ids.length; ++i) {
+            var id = ids[i].trim().toLowerCase();
+            if (id.length > 0 && ranks[id] === undefined) ranks[id] = i;
+        }
+
+        items.sort(function(a, b) {
+            var aid = a && a.provider_id ? a.provider_id.toLowerCase() : "";
+            var bid = b && b.provider_id ? b.provider_id.toLowerCase() : "";
+            var ar = ranks[aid] === undefined ? 100000 : ranks[aid];
+            var br = ranks[bid] === undefined ? 100000 : ranks[bid];
+            if (ar !== br) return ar - br;
+            return aid.localeCompare(bid);
+        });
+        return items;
+    }
+
     function _recompute() {
         var nowSec = Date.now() / 1000;
         var genSec = _epochSeconds(generatedAt);
         var ageSec = genSec > 0 ? (nowSec - genSec) : Number.POSITIVE_INFINITY;
         daemonStaleWarning = ageSec >= daemonStaleThresholdSec;
         daemonDeadStale = ageSec >= daemonDeadThresholdSec;
+
+        displayCards = _orderedCards(cards);
 
         var maxPct = 0.0;
         var anyError = false;
@@ -119,19 +165,24 @@ QtObject {
                 if (!c) continue;
                 if (c.error_message) anyError = true;
                 if (c.is_stale) anyStaleCard = true;
-                var qws = c.quota_windows || [];
-                for (var j = 0; j < qws.length; ++j) {
-                    var p = qws[j].used_percent;
-                    if (typeof p === "number" && !isNaN(p) && p > maxPct) maxPct = p;
-                }
-                var cms = c.credit_meters || [];
-                for (var k = 0; k < cms.length; ++k) {
-                    var cp = cms[k].used_percent;
-                    if (typeof cp === "number" && !isNaN(cp) && cp > maxPct) maxPct = cp;
-                }
+                maxPct = Math.max(maxPct, _providerMaxPercent(c));
             }
         }
         maxUsagePercent = maxPct;
+
+        trayUsagePercent = maxPct;
+        trayLabel = "max";
+        if (trayMode === "selected-provider" && trayProvider && trayProvider.trim().length) {
+            var selectedId = trayProvider.trim().toLowerCase();
+            for (var m = 0; cards && m < cards.length; ++m) {
+                var card = cards[m];
+                if (card && card.provider_id && card.provider_id.toLowerCase() === selectedId) {
+                    trayUsagePercent = _providerMaxPercent(card);
+                    trayLabel = card.display_name || card.provider_id;
+                    break;
+                }
+            }
+        }
 
         // worstState precedence: missing > error > stale > critical > warning > ok
         if (readError && readError.length) {
@@ -152,6 +203,10 @@ QtObject {
             worstState = "ok";
         }
     }
+
+    onProviderOrderChanged: _recompute()
+    onTrayProviderChanged: _recompute()
+    onTrayModeChanged: _recompute()
 
     function load() {
         if (_loading) return;   // skip overlapping reads

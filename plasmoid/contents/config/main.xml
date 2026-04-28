@@ -45,5 +45,17 @@
             <min>1</min>
             <max>300</max>
         </entry>
+        <entry name="providerOrder" type="String">
+            <label>Comma-separated provider order for the popup</label>
+            <default></default>
+        </entry>
+        <entry name="trayProvider" type="String">
+            <label>Provider id to show in the tray when tray mode is selected-provider</label>
+            <default></default>
+        </entry>
+        <entry name="trayMode" type="String">
+            <label>Tray display mode: highest-usage or selected-provider</label>
+            <default>highest-usage</default>
+        </entry>
     </group>
 </kcfg>

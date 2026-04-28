@@ -14,6 +14,15 @@ Kirigami.FormLayout {
     property alias cfg_daemonStaleThreshold: staleSpin.value
     property alias cfg_daemonDeadThreshold: deadSpin.value
     property alias cfg_pollingInterval: pollSpin.value
+    property alias cfg_providerOrder: providerOrderField.text
+    property alias cfg_trayProvider: trayProviderField.text
+    property string cfg_trayMode: trayModeCombo.currentIndex === 1
+        ? "selected-provider"
+        : "highest-usage"
+
+    Component.onCompleted: {
+        trayModeCombo.currentIndex = cfg_trayMode === "selected-provider" ? 1 : 0;
+    }
 
     QQC2.TextField {
         id: snapshotPathField
@@ -55,5 +64,32 @@ Kirigami.FormLayout {
         Kirigami.FormData.label: i18n("Polling interval (seconds):")
         from: 1
         to: 300
+    }
+
+    QQC2.TextField {
+        id: providerOrderField
+        Kirigami.FormData.label: i18n("Provider order:")
+        Layout.fillWidth: true
+        placeholderText: i18n("codex, claude")
+    }
+
+    QQC2.ComboBox {
+        id: trayModeCombo
+        Kirigami.FormData.label: i18n("Tray shows:")
+        textRole: "text"
+        valueRole: "value"
+        model: [
+            {"text": i18n("Highest usage"), "value": "highest-usage"},
+            {"text": i18n("Selected provider"), "value": "selected-provider"}
+        ]
+        onActivated: cfg_trayMode = currentValue
+    }
+
+    QQC2.TextField {
+        id: trayProviderField
+        Kirigami.FormData.label: i18n("Active in tray:")
+        Layout.fillWidth: true
+        placeholderText: i18n("codex")
+        enabled: trayModeCombo.currentValue === "selected-provider"
     }
 }

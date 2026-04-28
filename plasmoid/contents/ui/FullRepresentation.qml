@@ -108,7 +108,7 @@ Item {
                 spacing: Kirigami.Units.smallSpacing
 
                 Repeater {
-                    model: store ? store.cards : []
+                    model: store ? store.displayCards : []
                     delegate: ProviderCard {
                         card: modelData
                         store: root.store
@@ -128,10 +128,10 @@ Item {
                     horizontalAlignment: Text.AlignHCenter
                 }
 
-                // ----- Diagnostics (collapsible, secondary) -----
+                // ----- Debug / diagnostics (collapsible, secondary) -----
                 Item {
                     Layout.fillWidth: true
-                    visible: store && store.diagnostics && store.diagnostics.length > 0
+                    visible: store
                     implicitHeight: diagCol.implicitHeight
 
                     ColumnLayout {
@@ -142,7 +142,7 @@ Item {
 
                         PlasmaComponents.ToolButton {
                             id: diagToggle
-                            text: (checked ? "Hide" : "Show") + " diagnostics ("
+                            text: (checked ? "Hide" : "Show") + " debug ("
                                   + (store && store.diagnostics ? store.diagnostics.length : 0) + ")"
                             checkable: true
                             checked: false
@@ -161,9 +161,22 @@ Item {
                                 id: diagText
                                 anchors.fill: parent
                                 anchors.margins: Kirigami.Units.smallSpacing
-                                text: store && store.diagnostics
-                                      ? store.diagnostics.join("\n")
-                                      : ""
+                                text: {
+                                    if (!store) return "";
+                                    var lines = [];
+                                    lines.push("providers: " + (store.cards ? store.cards.length : 0));
+                                    lines.push("max usage: " + Math.round(store.maxUsagePercent) + "%");
+                                    lines.push("snapshot: " + store.resolvedPath);
+                                    if (store.generatedAt) lines.push("generated: " + store.generatedAt);
+                                    if (store.diagnostics && store.diagnostics.length) {
+                                        lines.push("");
+                                        lines.push(store.diagnostics.join("\n"));
+                                    } else {
+                                        lines.push("");
+                                        lines.push("No diagnostics.");
+                                    }
+                                    return lines.join("\n");
+                                }
                                 color: Kirigami.Theme.disabledTextColor
                                 font.pixelSize: Kirigami.Theme.smallFont.pixelSize
                                 wrapMode: Text.WordWrap

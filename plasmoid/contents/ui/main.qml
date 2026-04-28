@@ -17,6 +17,9 @@ PlasmoidItem {
         daemonStaleThresholdSec: Plasmoid.configuration.daemonStaleThreshold
         daemonDeadThresholdSec: Plasmoid.configuration.daemonDeadThreshold
         pollingInterval: Plasmoid.configuration.pollingInterval
+        providerOrder: Plasmoid.configuration.providerOrder
+        trayProvider: Plasmoid.configuration.trayProvider
+        trayMode: Plasmoid.configuration.trayMode
     }
 
     // Keep both representations referencing the same store via property aliases.
@@ -41,7 +44,8 @@ PlasmoidItem {
         if (!store.codexbarAvailable) return "CodexBar not available";
         if (store.daemonDeadStale) return "Daemon snapshot is stale";
         if (store.cards && store.cards.length)
-            return store.cards.length + " providers • max " + Math.round(store.maxUsagePercent) + "%";
+            return store.cards.length + " providers • "
+                + store.trayLabel + " " + Math.round(store.trayUsagePercent) + "%";
         return "No providers";
     }
 }

@@ -4,6 +4,7 @@
 // rendered as repeaters in the array order the daemon supplied.
 
 import QtQuick
+import QtQuick.Controls as QQC2
 import QtQuick.Layouts
 import org.kde.kirigami 2.20 as Kirigami
 
@@ -100,13 +101,22 @@ Rectangle {
             Layout.fillWidth: true
         }
 
-        // Per-field metadata block (provider_id, last_success/last_attempt).
-        // Lives below the headline rows so the eye lands on usage data first.
-        // Provider-agnostic — values come from snapshot.cards[i] verbatim.
+        QQC2.ToolButton {
+            id: detailsToggle
+            visible: card && (card.provider_id || card.last_success || card.last_attempt)
+            text: checked ? "Hide details" : "Show details"
+            checkable: true
+            checked: false
+            flat: true
+            Layout.leftMargin: -Kirigami.Units.smallSpacing
+        }
+
+        // Per-field metadata block. Collapsed by default so routine ids and
+        // timestamps do not crowd the quota bars.
         ColumnLayout {
             Layout.fillWidth: true
             spacing: 0
-            visible: card && (card.provider_id || card.last_success || card.last_attempt)
+            visible: detailsToggle.visible && detailsToggle.checked
 
             Text {
                 visible: card && card.provider_id && card.provider_id.length > 0
