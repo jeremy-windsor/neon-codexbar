@@ -143,3 +143,50 @@ Optional automatic-removal test, only if v2 is implemented:
 - The script clearly distinguishes package removal from panel instance removal.
 - v1 does not risk corrupting unrelated Plasma layout config.
 - Any future automatic cleanup is opt-in or well-validated on Plasma 6.
+
+## Status — applied 2026-04-27
+
+v1 fixes landed in `packaging/uninstall.sh`. v2 (auto-removal via
+`qdbus6 evaluateScript`) deliberately deferred — the plan flagged it as risky
+without live Plasma 6 validation, and the warning + restart flow gives users
+the same outcome safely.
+
+### Behavior matrix
+
+| Panel instance present? | Interactive? | `--force` | Result |
+|---|---|---|---|
+| no | n/a | n/a | normal flow, no warning, no extra messaging |
+| yes | yes | no | warning + `Continue uninstall anyway? [y/N]` (default N) |
+| yes | yes | yes | warning + auto-continue, "WARNING: --force given" line |
+| yes | no (pipe/CI) | no | warning + auto-continue, "non-interactive shell" notice |
+| yes | no (pipe/CI) | yes | warning + auto-continue, "--force given" line |
+
+### What changed
+
+1. **Detection** — greps for `org.jeremywindsor.neon-codexbar` in
+   `~/.config/plasma-org.kde.plasma.desktop-appletsrc`. No editing of that
+   file, ever.
+2. **Warning + interactive prompt** — clear three-step recommended order
+   (Edit Mode → Remove → re-run). Default is NO so a stray Enter doesn't
+   proceed.
+3. **`--force`** — bypasses the prompt; package is removed anyway with a
+   `WARNING: --force given` line.
+4. **`--restart-plasma`** — opt-in, runs `kquitapp6 plasmashell && kstart
+   plasmashell` at the very end to clear orphaned panel instances. Mirrors
+   `install.sh`'s flag.
+5. **End-of-run reminder** — when a panel instance was found and
+   `--restart-plasma` was NOT given, the script prints the three options:
+   remove from Edit Mode, restart plasmashell now, or re-run with the flag.
+
+### Smoke-tested in sandbox
+
+Both paths exercised against fake `$HOME` directories:
+
+- `appletsrc` containing the plugin id with `--force`: warning printed,
+  uninstall continued, end-of-run reminder shown.
+- no `appletsrc`: silent normal flow.
+
+`bash -n` clean. `--help` documents all three flags.
+
+Plan status: **complete** (v1). v2 (auto-removal) deferred pending Plasma 6
+validation if the v1 UX proves insufficient.
