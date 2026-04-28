@@ -20,7 +20,9 @@ def test_normalizer_handles_codex_primary_secondary_windows() -> None:
     assert card.source == "codex-cli"
     assert [window.id for window in card.quota_windows] == ["primary", "secondary"]
     assert card.quota_windows[0].used_percent == 55.0
+    assert card.quota_windows[0].window_label == "5-hour window"
     assert card.quota_windows[1].window_minutes == 10080
+    assert card.quota_windows[1].window_label == "7-day window"
     assert card.credit_meters[0].balance == 42.0
     assert card.error_message is None
 
@@ -35,8 +37,10 @@ def test_normalizer_handles_claude_primary_secondary_windows() -> None:
     assert card.quota_windows[0].reset_description is None
     assert card.quota_windows[0].resets_at is None
     assert card.quota_windows[0].window_minutes == 300
+    assert card.quota_windows[0].window_label == "5-hour window"
     assert card.quota_windows[1].resets_at is not None
     assert card.quota_windows[1].window_minutes == 10080
+    assert card.quota_windows[1].window_label == "7-day window"
 
 
 def test_normalizer_handles_zai_primary_secondary_tertiary_windows() -> None:
@@ -45,9 +49,9 @@ def test_normalizer_handles_zai_primary_secondary_tertiary_windows() -> None:
     assert card.provider_id == "zai"
     assert [window.id for window in card.quota_windows] == ["primary", "secondary", "tertiary"]
     assert [window.window_label for window in card.quota_windows] == [
-        "Window 1",
-        "Window 2",
-        "Window 3",
+        "7-day window",
+        None,
+        "5-hour window",
     ]
     assert card.credit_meters == []
 

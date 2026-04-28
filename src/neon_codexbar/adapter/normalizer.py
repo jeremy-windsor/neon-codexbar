@@ -69,6 +69,21 @@ def _display_name(provider_id: str) -> str:
     return DISPLAY_NAMES.get(provider_id, provider_id.replace("-", " ").replace("_", " ").title())
 
 
+def _window_duration_label(window_minutes: int | None) -> str | None:
+    if window_minutes is None:
+        return None
+    if window_minutes % 10080 == 0:
+        weeks = window_minutes // 10080
+        return f"{weeks}-week window" if weeks != 1 else "7-day window"
+    if window_minutes % 1440 == 0:
+        days = window_minutes // 1440
+        return f"{days}-day window"
+    if window_minutes % 60 == 0:
+        hours = window_minutes // 60
+        return f"{hours}-hour window"
+    return f"{window_minutes}-minute window"
+
+
 def _identity_from_payload(payload: JsonDict, usage: JsonDict) -> JsonDict:
     identity = dict(_as_dict(usage.get("identity")))
     if payload.get("account") is not None and "account" not in identity:
@@ -85,6 +100,7 @@ def _normalize_window(
     window_label: str | None,
     raw_window: JsonDict,
 ) -> QuotaWindow:
+    window_minutes = _as_int(raw_window.get("windowMinutes"))
     return QuotaWindow(
         id=window_id,
         used_percent=_as_float(raw_window.get("usedPercent")),
@@ -94,8 +110,8 @@ def _normalize_window(
             if isinstance(raw_window.get("resetDescription"), str)
             else None
         ),
-        window_label=window_label,
-        window_minutes=_as_int(raw_window.get("windowMinutes")),
+        window_label=window_label or _window_duration_label(window_minutes),
+        window_minutes=window_minutes,
         raw=raw_window,
     )
 
@@ -112,7 +128,7 @@ def _quota_windows(usage: JsonDict) -> list[QuotaWindow]:
                 window_label=(
                     raw_window.get("title")
                     if isinstance(raw_window.get("title"), str)
-                    else f"Window {index}"
+                    else None
                 ),
                 raw_window=raw_window,
             )

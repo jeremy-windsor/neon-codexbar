@@ -55,6 +55,8 @@ UNIT_SRC="${SCRIPT_DIR}/neon-codexbar.service"
 USER_UNIT_DIR="${HOME}/.config/systemd/user"
 UNIT_DEST="${USER_UNIT_DIR}/neon-codexbar.service"
 PLASMOID_ID="org.jeremywindsor.neon-codexbar"
+CODEXBAR_CONFIG_DIR="${HOME}/.codexbar"
+CODEXBAR_CONFIG="${CODEXBAR_CONFIG_DIR}/config.json"
 
 # --- helpers -------------------------------------------------------------------
 die() {
@@ -68,6 +70,59 @@ info() {
 
 warn() {
   printf 'WARNING: %s\n' "$*" >&2
+}
+
+find_codexbar() {
+  local candidate
+  for candidate in \
+    "$(command -v codexbar 2>/dev/null || true)" \
+    "$(command -v CodexBarCLI 2>/dev/null || true)" \
+    "${HOME}/.local/bin/codexbar" \
+    "${HOME}/.local/bin/CodexBarCLI" \
+    "${HOME}/bin/codexbar" \
+    "${HOME}/bin/CodexBarCLI"
+  do
+    if [[ -n "${candidate}" && -x "${candidate}" ]]; then
+      printf '%s\n' "${candidate}"
+      return 0
+    fi
+  done
+  return 1
+}
+
+bootstrap_codexbar_config() {
+  local codexbar_bin
+  if ! codexbar_bin="$(find_codexbar)"; then
+    warn "CodexBar CLI not found; skipping ~/.codexbar/config.json bootstrap"
+    return
+  fi
+
+  if [[ -f "${CODEXBAR_CONFIG}" ]]; then
+    info "CodexBar config already exists at ${CODEXBAR_CONFIG}; leaving it unchanged"
+    if "${codexbar_bin}" config validate --format json >/dev/null 2>&1; then
+      info "CodexBar config validates"
+    else
+      warn "CodexBar config did not validate. Run: ${codexbar_bin} config validate --format json --pretty"
+    fi
+    return
+  fi
+
+  info "Creating initial CodexBar config at ${CODEXBAR_CONFIG}"
+  mkdir -p "${CODEXBAR_CONFIG_DIR}" \
+    || { warn "Could not create ${CODEXBAR_CONFIG_DIR}; skipping CodexBar config bootstrap"; return; }
+
+  local tmp
+  tmp="$(mktemp)"
+  if ! "${codexbar_bin}" config dump --format json > "${tmp}"; then
+    rm -f "${tmp}"
+    warn "Could not dump CodexBar config; skipping CodexBar config bootstrap"
+    return
+  fi
+
+  install -m 0600 "${tmp}" "${CODEXBAR_CONFIG}" \
+    || { rm -f "${tmp}"; warn "Could not write ${CODEXBAR_CONFIG}"; return; }
+  rm -f "${tmp}"
+  info "CodexBar config created with CodexBar's default provider states"
 }
 
 # --- step 1: prerequisites -----------------------------------------------------
@@ -130,6 +185,13 @@ fi
 rm -f /tmp/neon-codexbar-pip.log
 
 info "Python package installed"
+
+# --- step 2b: CodexBar config bootstrap ---------------------------------------
+# neon-codexbar discovers enabled providers from CodexBar's config dump. If the
+# user has never created ~/.codexbar/config.json, write the full default config
+# once so future provider enablement has a stable file to edit. Never overwrite
+# an existing config and never enable extra providers automatically.
+bootstrap_codexbar_config
 
 # --- step 3: plasmoid install or upgrade --------------------------------------
 [[ -d "${PLASMOID_DIR}" ]] \

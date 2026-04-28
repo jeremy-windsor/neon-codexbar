@@ -106,5 +106,9 @@ def discover(runner: CodexBarRunner) -> DiscoveryResult:
             command_result=result,
         )
 
-    diagnostics = [entry.diagnostic for entry in providers if entry.diagnostic]
+    diagnostics = [
+        entry.diagnostic
+        for entry in providers
+        if entry.diagnostic and entry.enabled is not False
+    ]
     return DiscoveryResult(providers=providers, diagnostics=diagnostics, command_result=result)

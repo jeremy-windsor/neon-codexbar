@@ -1,7 +1,7 @@
 // QuotaWindowBar.qml
 // Renders one quota window. Label fallback: window_label > reset_description > id.
 // reset_description is also shown as the secondary line when present (e.g. z.ai's
-// "1 minute window" or codex's "11:02 AM"); resets_at appears parenthetically.
+// "1-minute window" or codex's "11:02 AM"); resets_at appears parenthetically.
 //
 // used_percent may be null (rare); if so we show a textless bar and the words
 // "no usage data".
@@ -43,11 +43,9 @@ ColumnLayout {
         // already used reset_description as the primary label.
         var rd = window.reset_description || "";
         var ra = window.resets_at || "";
-        var minutes = (typeof window.window_minutes === "number") ? window.window_minutes : null;
         var parts = [];
-        if (minutes !== null) parts.push(minutes + " min window");
-        else if (rd && _primaryLabel !== rd) parts.push(rd);
-        else if (rd && minutes === null && _primaryLabel === rd) {
+        if (rd && _primaryLabel !== rd) parts.push(rd);
+        else if (rd && _primaryLabel === rd) {
             // already shown
         }
         if (ra) parts.push("resets " + ra);
