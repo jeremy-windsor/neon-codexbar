@@ -104,7 +104,7 @@ Rectangle {
         QQC2.ToolButton {
             id: detailsToggle
             visible: card && (card.provider_id || card.last_success || card.last_attempt)
-            text: checked ? "Hide details" : "Show details"
+            text: checked ? "Hide provider details" : "Provider details"
             checkable: true
             checked: false
             flat: true

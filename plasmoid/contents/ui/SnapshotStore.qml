@@ -28,6 +28,7 @@ QtObject {
     property int daemonDeadThresholdSec: 1800
     property int pollingInterval: 5
     property string providerOrder: ""          // comma-separated provider ids
+    property string hiddenProviders: ""        // comma-separated provider ids hidden from popup/tray
     property string trayProvider: ""           // provider id when trayMode=selected-provider
     property string trayMode: "highest-usage"  // highest-usage | selected-provider
 
@@ -78,6 +79,7 @@ QtObject {
     property real maxUsagePercent: 0.0
     property real trayUsagePercent: 0.0
     property string trayLabel: "max"
+    property bool trayProviderMissing: false
     property string worstState: "missing"  // ok | warning | critical | error | stale | missing
 
     function _toFileUrl(absPath) {
@@ -147,6 +149,23 @@ QtObject {
         return items;
     }
 
+    function _visibleCards(sourceCards) {
+        var items = sourceCards ? sourceCards.slice(0) : [];
+        if (!hiddenProviders || hiddenProviders.trim().length === 0) return items;
+
+        var hidden = {};
+        var ids = hiddenProviders.split(",");
+        for (var i = 0; i < ids.length; ++i) {
+            var id = ids[i].trim().toLowerCase();
+            if (id.length > 0) hidden[id] = true;
+        }
+
+        return items.filter(function(card) {
+            var providerId = card && card.provider_id ? card.provider_id.toLowerCase() : "";
+            return !hidden[providerId];
+        });
+    }
+
     function _recompute() {
         var nowSec = Date.now() / 1000;
         var genSec = _epochSeconds(generatedAt);
@@ -154,14 +173,14 @@ QtObject {
         daemonStaleWarning = ageSec >= daemonStaleThresholdSec;
         daemonDeadStale = ageSec >= daemonDeadThresholdSec;
 
-        displayCards = _orderedCards(cards);
+        displayCards = _orderedCards(_visibleCards(cards));
 
         var maxPct = 0.0;
         var anyError = false;
         var anyStaleCard = false;
-        if (cards && cards.length) {
-            for (var i = 0; i < cards.length; ++i) {
-                var c = cards[i];
+        if (displayCards && displayCards.length) {
+            for (var i = 0; i < displayCards.length; ++i) {
+                var c = displayCards[i];
                 if (!c) continue;
                 if (c.error_message) anyError = true;
                 if (c.is_stale) anyStaleCard = true;
@@ -172,13 +191,16 @@ QtObject {
 
         trayUsagePercent = maxPct;
         trayLabel = "max";
+        trayProviderMissing = false;
         if (trayMode === "selected-provider" && trayProvider && trayProvider.trim().length) {
             var selectedId = trayProvider.trim().toLowerCase();
-            for (var m = 0; cards && m < cards.length; ++m) {
-                var card = cards[m];
+            trayProviderMissing = true;
+            for (var m = 0; displayCards && m < displayCards.length; ++m) {
+                var card = displayCards[m];
                 if (card && card.provider_id && card.provider_id.toLowerCase() === selectedId) {
                     trayUsagePercent = _providerMaxPercent(card);
                     trayLabel = card.display_name || card.provider_id;
+                    trayProviderMissing = false;
                     break;
                 }
             }
@@ -205,6 +227,7 @@ QtObject {
     }
 
     onProviderOrderChanged: _recompute()
+    onHiddenProvidersChanged: _recompute()
     onTrayProviderChanged: _recompute()
     onTrayModeChanged: _recompute()
 

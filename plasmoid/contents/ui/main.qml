@@ -18,6 +18,7 @@ PlasmoidItem {
         daemonDeadThresholdSec: Plasmoid.configuration.daemonDeadThreshold
         pollingInterval: Plasmoid.configuration.pollingInterval
         providerOrder: Plasmoid.configuration.providerOrder
+        hiddenProviders: Plasmoid.configuration.hiddenProviders
         trayProvider: Plasmoid.configuration.trayProvider
         trayMode: Plasmoid.configuration.trayMode
     }

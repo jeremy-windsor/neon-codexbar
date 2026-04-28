@@ -118,7 +118,7 @@ def _normalize_window(
 
 def _quota_windows(usage: JsonDict) -> list[QuotaWindow]:
     windows: list[QuotaWindow] = []
-    for index, key in enumerate(_WINDOW_KEYS, start=1):
+    for key in _WINDOW_KEYS:
         raw_window = _as_dict(usage.get(key))
         if not raw_window:
             continue

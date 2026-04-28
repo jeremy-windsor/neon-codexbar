@@ -43,13 +43,21 @@ ColumnLayout {
         // already used reset_description as the primary label.
         var rd = window.reset_description || "";
         var ra = _formatReset(window.resets_at || "");
+        var missingMinutes = window.window_minutes === undefined
+            || window.window_minutes === null
+        var rdIsWindowLabel = missingMinutes && _looksLikeWindowLabel(rd);
         var parts = [];
         if (rd && _primaryLabel !== rd) parts.push(rd);
         else if (rd && _primaryLabel === rd) {
             // already shown
         }
-        if (ra) parts.push("resets " + ra);
+        if (ra && !rdIsWindowLabel) parts.push("resets " + ra);
         return parts.join(" • ");
+    }
+
+    function _looksLikeWindowLabel(text) {
+        if (!text) return false;
+        return /^\s*\d+\s+(minute|minutes|hour|hours|day|days|week|weeks)\s+window\s*$/i.test(text);
     }
 
     function _formatReset(iso) {

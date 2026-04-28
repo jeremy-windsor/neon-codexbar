@@ -49,6 +49,10 @@
             <label>Comma-separated provider order for the popup</label>
             <default></default>
         </entry>
+        <entry name="hiddenProviders" type="String">
+            <label>Comma-separated provider ids hidden from the popup</label>
+            <default></default>
+        </entry>
         <entry name="trayProvider" type="String">
             <label>Provider id to show in the tray when tray mode is selected-provider</label>
             <default></default>

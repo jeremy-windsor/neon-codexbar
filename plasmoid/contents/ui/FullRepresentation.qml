@@ -93,7 +93,6 @@ Item {
             severity: "warning"
         }
 
-        // ----- Provider cards (scrollable) -----
         QQC2.ScrollView {
             id: scroll
             Layout.fillWidth: true
@@ -119,70 +118,78 @@ Item {
                 }
 
                 Text {
-                    visible: store && !store.readError && store.cards
-                             && store.cards.length === 0
+                    visible: store && !store.readError && store.displayCards
+                             && store.displayCards.length === 0
                     text: "No providers configured."
                     color: Kirigami.Theme.disabledTextColor
                     font.italic: true
                     Layout.fillWidth: true
                     horizontalAlignment: Text.AlignHCenter
                 }
+            }
+        }
 
-                // ----- Debug / diagnostics (collapsible, secondary) -----
-                Item {
-                    Layout.fillWidth: true
-                    visible: store
-                    implicitHeight: diagCol.implicitHeight
+        // ----- Debug / diagnostics (footer, collapsible, secondary) -----
+        ColumnLayout {
+            id: diagCol
+            visible: store
+            Layout.fillWidth: true
+            spacing: Kirigami.Units.smallSpacing / 2
 
-                    ColumnLayout {
-                        id: diagCol
-                        anchors.left: parent.left
-                        anchors.right: parent.right
-                        spacing: 0
+            Rectangle {
+                Layout.fillWidth: true
+                height: 1
+                color: Qt.rgba(Kirigami.Theme.textColor.r,
+                               Kirigami.Theme.textColor.g,
+                               Kirigami.Theme.textColor.b, 0.15)
+            }
 
-                        PlasmaComponents.ToolButton {
-                            id: diagToggle
-                            text: (checked ? "Hide" : "Show") + " debug ("
-                                  + (store && store.diagnostics ? store.diagnostics.length : 0) + ")"
-                            checkable: true
-                            checked: false
-                            flat: true
+            PlasmaComponents.ToolButton {
+                id: diagToggle
+                text: (checked ? "Hide" : "Show") + " debug ("
+                      + (store && store.diagnostics ? store.diagnostics.length : 0) + ")"
+                checkable: true
+                checked: false
+                flat: false
+                Layout.alignment: Qt.AlignLeft
+            }
+
+            Rectangle {
+                visible: diagToggle.checked
+                Layout.fillWidth: true
+                color: Qt.rgba(Kirigami.Theme.textColor.r,
+                               Kirigami.Theme.textColor.g,
+                               Kirigami.Theme.textColor.b, 0.04)
+                radius: Kirigami.Units.smallSpacing
+                implicitHeight: diagText.implicitHeight + Kirigami.Units.smallSpacing * 2
+                Text {
+                    id: diagText
+                    anchors.fill: parent
+                    anchors.margins: Kirigami.Units.smallSpacing
+                    text: {
+                        if (!store) return "";
+                        var lines = [];
+                        lines.push("providers: " + (store.cards ? store.cards.length : 0));
+                        lines.push("visible providers: " + (store.displayCards ? store.displayCards.length : 0));
+                        lines.push("tray mode: " + store.trayMode);
+                        if (store.trayProvider) lines.push("tray provider: " + store.trayProvider);
+                        if (store.trayProviderMissing) lines.push("tray provider missing; using max usage");
+                        lines.push("max usage: " + Math.round(store.maxUsagePercent) + "%");
+                        lines.push("snapshot: " + store.resolvedPath);
+                        if (store.codexbarVersion) lines.push("codexbar: " + store.codexbarVersion);
+                        if (store.generatedAt) lines.push("generated: " + store.generatedAt);
+                        if (store.diagnostics && store.diagnostics.length) {
+                            lines.push("");
+                            lines.push(store.diagnostics.join("\n"));
+                        } else {
+                            lines.push("");
+                            lines.push("No diagnostics.");
                         }
-
-                        Rectangle {
-                            visible: diagToggle.checked
-                            Layout.fillWidth: true
-                            color: Qt.rgba(Kirigami.Theme.textColor.r,
-                                           Kirigami.Theme.textColor.g,
-                                           Kirigami.Theme.textColor.b, 0.04)
-                            radius: Kirigami.Units.smallSpacing
-                            implicitHeight: diagText.implicitHeight + Kirigami.Units.smallSpacing * 2
-                            Text {
-                                id: diagText
-                                anchors.fill: parent
-                                anchors.margins: Kirigami.Units.smallSpacing
-                                text: {
-                                    if (!store) return "";
-                                    var lines = [];
-                                    lines.push("providers: " + (store.cards ? store.cards.length : 0));
-                                    lines.push("max usage: " + Math.round(store.maxUsagePercent) + "%");
-                                    lines.push("snapshot: " + store.resolvedPath);
-                                    if (store.generatedAt) lines.push("generated: " + store.generatedAt);
-                                    if (store.diagnostics && store.diagnostics.length) {
-                                        lines.push("");
-                                        lines.push(store.diagnostics.join("\n"));
-                                    } else {
-                                        lines.push("");
-                                        lines.push("No diagnostics.");
-                                    }
-                                    return lines.join("\n");
-                                }
-                                color: Kirigami.Theme.disabledTextColor
-                                font.pixelSize: Kirigami.Theme.smallFont.pixelSize
-                                wrapMode: Text.WordWrap
-                            }
-                        }
+                        return lines.join("\n");
                     }
+                    color: Kirigami.Theme.disabledTextColor
+                    font.pixelSize: Kirigami.Theme.smallFont.pixelSize
+                    wrapMode: Text.WordWrap
                 }
             }
         }
