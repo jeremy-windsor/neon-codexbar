@@ -1,17 +1,26 @@
 // CompactRepresentation.qml
 // Panel icon: a colored ring keyed off store.worstState. Theme colors only.
 //
-// Click-to-expand is handled by PlasmoidItem's default behavior; we deliberately
-// do NOT install a MouseArea here. An anchors-fill MouseArea would swallow
-// drag-to-move and middle-click events the panel chrome relies on.
+// Click-to-expand uses TapHandler (Qt 6 native pointer handler) rather than a
+// MouseArea — TapHandler is gesture-aware and does NOT swallow panel chrome
+// events like drag-to-move or middle-click. KDE Neon QA confirmed PlasmoidItem
+// does not auto-handle compact clicks; an explicit handler is required.
 
 import QtQuick
 import QtQuick.Layouts
+import org.kde.plasma.plasmoid 2.0
 import org.kde.kirigami 2.20 as Kirigami
 
 Item {
     id: root
     property var store
+
+    // Left-click toggles popup. TapHandler coexists with the panel's own
+    // gesture handling instead of overriding it.
+    TapHandler {
+        acceptedButtons: Qt.LeftButton
+        onTapped: Plasmoid.expanded = !Plasmoid.expanded
+    }
 
     // Plasma sizes panel icons via Layout hints; honor them.
     Layout.minimumWidth: Kirigami.Units.iconSizes.small

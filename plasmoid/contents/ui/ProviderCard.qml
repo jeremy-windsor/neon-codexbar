@@ -13,6 +13,9 @@ Rectangle {
     property bool daemonDeadStale: false
     property int warningThreshold: 70
     property int criticalThreshold: 90
+    // Optional: SnapshotStore reference, used only for relativeAge() on the
+    // last_success / last_attempt lines. Card still renders without it.
+    property var store: null
 
     Layout.fillWidth: true
     radius: Kirigami.Units.smallSpacing
@@ -77,14 +80,16 @@ Rectangle {
             }
         }
 
-        // Plan / login / identity (compact, optional)
+        // Identity row: plan / login_method / account email.
+        // Kept tight; the longer per-field metadata block sits below it.
         Text {
             visible: text.length > 0
             text: {
                 if (!card) return "";
                 var bits = [];
                 if (card.plan) bits.push("plan: " + card.plan);
-                if (card.login_method) bits.push(card.login_method);
+                if (card.login_method && card.login_method !== card.plan)
+                    bits.push(card.login_method);
                 if (card.identity && card.identity.accountEmail)
                     bits.push(card.identity.accountEmail);
                 return bits.join(" • ");
@@ -93,6 +98,56 @@ Rectangle {
             font.pixelSize: Kirigami.Theme.smallFont.pixelSize
             wrapMode: Text.WordWrap
             Layout.fillWidth: true
+        }
+
+        // Per-field metadata block (provider_id, last_success/last_attempt).
+        // Lives below the headline rows so the eye lands on usage data first.
+        // Provider-agnostic — values come from snapshot.cards[i] verbatim.
+        ColumnLayout {
+            Layout.fillWidth: true
+            spacing: 0
+            visible: card && (card.provider_id || card.last_success || card.last_attempt)
+
+            Text {
+                visible: card && card.provider_id && card.provider_id.length > 0
+                text: card && card.provider_id ? "id: " + card.provider_id : ""
+                color: Kirigami.Theme.disabledTextColor
+                font.pixelSize: Kirigami.Theme.smallFont.pixelSize
+                font.family: "monospace"
+                Layout.fillWidth: true
+            }
+            Text {
+                visible: card && card.last_success
+                text: {
+                    if (!card || !card.last_success) return "";
+                    var ago = root.store && root.store.relativeAge
+                        ? root.store.relativeAge(card.last_success)
+                        : card.last_success;
+                    return "last success: " + ago;
+                }
+                color: Kirigami.Theme.disabledTextColor
+                font.pixelSize: Kirigami.Theme.smallFont.pixelSize
+                Layout.fillWidth: true
+            }
+            Text {
+                // Show last_attempt only if it differs meaningfully from last_success
+                // (i.e. there's been a recent failed retry).
+                visible: {
+                    if (!card || !card.last_attempt) return false;
+                    if (!card.last_success) return true;
+                    return card.last_attempt !== card.last_success;
+                }
+                text: {
+                    if (!card || !card.last_attempt) return "";
+                    var ago = root.store && root.store.relativeAge
+                        ? root.store.relativeAge(card.last_attempt)
+                        : card.last_attempt;
+                    return "last attempt: " + ago;
+                }
+                color: Kirigami.Theme.disabledTextColor
+                font.pixelSize: Kirigami.Theme.smallFont.pixelSize
+                Layout.fillWidth: true
+            }
         }
 
         // Per-provider error banner.

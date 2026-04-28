@@ -146,3 +146,59 @@ Use separate agents for independent verification:
 - The current Codex card explains what the 86% refers to through quota-window labels/reset text.
 - No provider-specific assumptions are added to QML.
 - Fresh journal logs stay free of QML activation/layout errors.
+
+## Status — applied 2026-04-27
+
+Two fixes landed:
+
+### 1. Click-to-expand activation
+
+Root cause: removing the explicit `MouseArea` in the previous peer-review pass
+left `CompactRepresentation` with no input handler at all. PlasmoidItem does
+**not** auto-handle compact clicks under Plasma 6 — that was a wrong claim in
+the prior peer review.
+
+Fix: `TapHandler` in `plasmoid/contents/ui/CompactRepresentation.qml`:
+
+```qml
+TapHandler {
+    acceptedButtons: Qt.LeftButton
+    onTapped: Plasmoid.expanded = !Plasmoid.expanded
+}
+```
+
+`TapHandler` (Qt 6 native pointer handler) toggles the popup but, unlike a
+`MouseArea` with `anchors.fill: parent`, does **not** swallow the panel
+chrome's drag-to-move or middle-click events. This satisfies both the prior
+peer-review concern and the actual KDE Neon QA finding.
+
+### 2. Enriched popup metadata
+
+`plasmoid/contents/ui/ProviderCard.qml` gains a per-field metadata block under
+the identity row:
+
+- `id: <provider_id>` (monospaced)
+- `last success: <relative time>`
+- `last attempt: <relative time>` (only when it differs from `last_success`,
+  i.e. a recent failed retry)
+
+Reuses `SnapshotStore.relativeAge()` via a new optional `store` property on
+`ProviderCard` (passed through from `FullRepresentation`'s `Repeater`).
+Stays provider-agnostic — values come from `snapshot.cards[i]` verbatim.
+
+Header still shows `display_name`, `source v<version>`, and a `stale` badge.
+Identity row still shows `plan / login_method / accountEmail` (de-duplicated
+when login_method == plan).
+
+### Acceptance retest items for KDE Neon
+
+After re-installing (`./packaging/install.sh --restart-plasma`):
+
+1. Compact icon still shows summary.
+2. Left-click on the icon opens the popup. ← was failing before
+3. Drag the widget on the panel still works. ← TapHandler doesn't swallow
+4. Middle-click on the widget still triggers the panel context, not popup.
+5. ProviderCard shows the new metadata block (id, last success/attempt).
+6. Diagnostics toggle still works.
+
+Plan status: **complete pending KDE Neon retest**.

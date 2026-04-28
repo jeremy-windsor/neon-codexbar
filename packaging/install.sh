@@ -15,6 +15,37 @@
 
 set -euo pipefail
 
+# --- argument parsing ----------------------------------------------------------
+RESTART_PLASMA=0
+for arg in "$@"; do
+  case "${arg}" in
+    --restart-plasma)
+      RESTART_PLASMA=1
+      ;;
+    -h|--help)
+      cat <<'USAGE'
+Usage: install.sh [--restart-plasma]
+
+Installs the neon-codexbar Python package, plasmoid, and systemd user unit.
+Idempotent: safe to re-run.
+
+Options:
+  --restart-plasma   Restart plasmashell at the end so the QML XHR file-read
+                     environment variable is picked up. Closes and reopens
+                     panels — interactive sessions only. Without this flag,
+                     the script prints the restart command for you to run
+                     yourself when convenient.
+USAGE
+      exit 0
+      ;;
+    *)
+      printf 'install.sh: unknown argument: %s\n' "${arg}" >&2
+      printf 'Try --help.\n' >&2
+      exit 2
+      ;;
+  esac
+done
+
 # --- locate repo root from the script's own directory --------------------------
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 REPO_ROOT="$(cd -- "${SCRIPT_DIR}/.." &>/dev/null && pwd)"
@@ -33,6 +64,10 @@ die() {
 
 info() {
   printf '==> %s\n' "$*"
+}
+
+warn() {
+  printf 'WARNING: %s\n' "$*" >&2
 }
 
 # --- step 1: prerequisites -----------------------------------------------------
@@ -151,6 +186,62 @@ systemctl --user enable --now neon-codexbar.service \
 
 info "Daemon enabled and started"
 
+# --- step 5: enable QML XHR file:// reads --------------------------------------
+# Plasma 6 disables file:// XHR by default. The plasmoid reads
+# ~/.cache/neon-codexbar/snapshot.json via XMLHttpRequest, so it needs
+# QML_XHR_ALLOW_FILE_READ=1 in plasmashell's environment. Set it in the user
+# systemd manager AND broadcast it to dbus-activated apps so the next
+# plasmashell launch inherits it.
+info "Enabling QML XHR file reads for plasmashell (QML_XHR_ALLOW_FILE_READ=1)"
+
+if ! systemctl --user set-environment QML_XHR_ALLOW_FILE_READ=1 2>/dev/null; then
+  warn "systemctl --user set-environment failed; plasmashell may need it set manually"
+fi
+
+if command -v dbus-update-activation-environment >/dev/null 2>&1; then
+  if ! dbus-update-activation-environment --systemd QML_XHR_ALLOW_FILE_READ=1 2>/dev/null; then
+    warn "dbus-update-activation-environment failed; non-systemd-launched apps may not see the var"
+  fi
+else
+  warn "dbus-update-activation-environment not found; consider installing dbus-x11 (Debian/Ubuntu)"
+fi
+
+# Verify the var landed where we expect.
+if systemctl --user show-environment 2>/dev/null | grep -qF 'QML_XHR_ALLOW_FILE_READ=1'; then
+  info "QML_XHR_ALLOW_FILE_READ=1 set in user systemd environment"
+else
+  warn "Could not confirm QML_XHR_ALLOW_FILE_READ=1 in systemctl --user show-environment"
+fi
+
+# --- step 6: optional plasmashell restart --------------------------------------
+# plasmashell only inherits the new env var when it (re)starts. Without a
+# restart the env var is set for future logins but the running widget will
+# still hit the file-read block. Restart is destructive (closes/reopens
+# panels), so we make it opt-in via --restart-plasma.
+if [[ "${RESTART_PLASMA}" -eq 1 ]]; then
+  info "Restarting plasmashell to apply env var (panels will reload)"
+  if command -v kquitapp6 >/dev/null 2>&1; then
+    kquitapp6 plasmashell >/dev/null 2>&1 || true
+  fi
+  if command -v kstart >/dev/null 2>&1; then
+    # kstart returns immediately; plasmashell respawns in the background.
+    kstart plasmashell >/dev/null 2>&1 &
+    disown
+    info "plasmashell restart issued"
+  else
+    warn "kstart not found; plasmashell will respawn on next session start"
+  fi
+fi
+
 # --- final message -------------------------------------------------------------
 echo
-printf 'Done. Add the widget: right-click panel \xe2\x86\x92 Add Widgets \xe2\x86\x92 search '\''neon-codexbar'\''. Provider auth setup: see docs/PROVIDER_SETUP.md.\n'
+printf 'Done. Add the widget: right-click panel \xe2\x86\x92 Add Widgets \xe2\x86\x92 search '\''neon-codexbar'\''.\n'
+printf 'Provider auth setup: see docs/PROVIDER_SETUP.md.\n'
+if [[ "${RESTART_PLASMA}" -ne 1 ]]; then
+  echo
+  echo 'IMPORTANT: To apply QML_XHR_ALLOW_FILE_READ to a running plasmashell,'
+  echo 'either log out and back in, or restart the shell now:'
+  echo '    kquitapp6 plasmashell && kstart plasmashell'
+  echo 'Without a restart, the widget will say "CodexBar not available" even'
+  echo 'while the daemon is writing valid snapshots.'
+fi

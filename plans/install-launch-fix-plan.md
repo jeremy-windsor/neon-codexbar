@@ -69,3 +69,28 @@ Expected result:
 ## Follow-Up
 
 Longer term, consider replacing QML `XMLHttpRequest file://` reads with a KDE-supported local I/O bridge if Plasma continues tightening local file access. For now, the environment variable is the smallest install-time fix and matches Plasma's own runtime diagnostic.
+
+## Status — applied 2026-04-27
+
+| Item | Status | Where |
+|---|---|---|
+| `config.qml` source path uses `config/ConfigGeneral.qml` | done (manual fix in commit `cee4796`) | `plasmoid/contents/config/config.qml:8` |
+| `systemctl --user set-environment QML_XHR_ALLOW_FILE_READ=1` | done | `packaging/install.sh` step 5 |
+| `dbus-update-activation-environment --systemd QML_XHR_ALLOW_FILE_READ=1` | done | `packaging/install.sh` step 5 (with `dbus-x11` install hint if missing) |
+| Post-install `systemctl --user show-environment` validation | done | `packaging/install.sh` step 5 |
+| Plasma shell restart (opt-in via `--restart-plasma`) | done | `packaging/install.sh` step 6, also printed as instructions when flag absent |
+| Warn-not-fail behavior on env-set / dbus failures | done | both wrapped in `warn` not `die` |
+
+QA on KDE Neon:
+
+```bash
+./packaging/install.sh --restart-plasma
+systemctl --user show-environment | grep -F 'QML_XHR_ALLOW_FILE_READ=1'
+tr '\0' '\n' < /proc/$(pgrep -n plasmashell)/environ | grep '^QML_XHR_ALLOW_FILE_READ=1$'
+journalctl --user -b --since '2 minutes ago' --no-pager \
+  | grep -iE 'neon-codexbar|QML_XHR|ConfigurationShortcuts|AboutPlugin|PageRow.qml'
+```
+
+Expected: env var present in both systemd manager and the running `plasmashell` process; no fresh `QML_XHR_ALLOW_FILE_READ` warnings; no `cfg_*` errors against `ConfigurationShortcuts` / `AboutPlugin`.
+
+Plan status: **complete**.

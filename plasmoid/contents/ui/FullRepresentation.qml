@@ -111,6 +111,7 @@ Item {
                     model: store ? store.cards : []
                     delegate: ProviderCard {
                         card: modelData
+                        store: root.store
                         daemonDeadStale: store ? store.daemonDeadStale : false
                         warningThreshold: store ? store.warningThreshold : 70
                         criticalThreshold: store ? store.criticalThreshold : 90
