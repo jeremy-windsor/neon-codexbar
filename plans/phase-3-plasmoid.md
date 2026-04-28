@@ -1,7 +1,7 @@
 # Phase 3 — Plasmoid v1 Generic Renderer
 
 Date opened: 2026-04-27
-Status: in progress (build dispatched)
+Status: ready for KDE Neon QA
 
 ## Sandbox constraint
 
@@ -104,7 +104,7 @@ above. No code blockers from my cross-check.
 - [x] Peer-review agent verdict captured below
 - [x] Review fixes applied or deferred with reasons
 - [x] Tests + ruff still green (no Python regressions) — 35 passing
-- [ ] `git push origin main`
+- [x] `git push origin main` — pushed as `713cdd7`
 
 ## Peer review verdict — 2026-04-27
 
