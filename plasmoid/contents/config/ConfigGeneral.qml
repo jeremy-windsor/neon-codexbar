@@ -2,11 +2,12 @@ import QtQuick
 import QtQuick.Controls as QQC2
 import QtQuick.Layouts
 import Qt.labs.platform as Labs
+import org.kde.kcmutils as KCM
 import org.kde.kirigami 2.20 as Kirigami
 
 // Standard Plasma 6 KConfigXT pattern: properties named cfg_<entry> are
 // auto-bound to the matching <entry name> in main.xml via plasma's config dialog.
-Kirigami.FormLayout {
+KCM.SimpleKCM {
     id: root
 
     property alias cfg_snapshotPath: snapshotPathField.text
@@ -206,175 +207,179 @@ Kirigami.FormLayout {
         syncFromProviderModel();
     }
 
-    QQC2.TextField {
-        id: snapshotPathField
-        Kirigami.FormData.label: i18n("Snapshot path:")
+    Kirigami.FormLayout {
         Layout.fillWidth: true
-        placeholderText: i18n("Leave empty for $HOME/.cache/neon-codexbar/snapshot.json")
-    }
 
-    QQC2.SpinBox {
-        id: warningSpin
-        Kirigami.FormData.label: i18n("Warning threshold (%):")
-        from: 1
-        to: 100
-    }
-
-    QQC2.SpinBox {
-        id: criticalSpin
-        Kirigami.FormData.label: i18n("Critical threshold (%):")
-        from: 1
-        to: 100
-    }
-
-    QQC2.SpinBox {
-        id: staleSpin
-        Kirigami.FormData.label: i18n("Snapshot stale (seconds):")
-        from: 30
-        to: 86400
-    }
-
-    QQC2.SpinBox {
-        id: deadSpin
-        Kirigami.FormData.label: i18n("Daemon dead (seconds):")
-        from: 60
-        to: 86400
-    }
-
-    QQC2.SpinBox {
-        id: pollSpin
-        Kirigami.FormData.label: i18n("Polling interval (seconds):")
-        from: 1
-        to: 300
-    }
-
-    QQC2.ComboBox {
-        id: trayModeCombo
-        Kirigami.FormData.label: i18n("Tray shows:")
-        textRole: "text"
-        valueRole: "value"
-        model: [
-            {"text": i18n("Highest usage"), "value": "highest-usage"},
-            {"text": i18n("Selected provider"), "value": "selected-provider"}
-        ]
-        onActivated: cfg_trayMode = currentValue
-    }
-
-    QQC2.ComboBox {
-        id: trayProviderCombo
-        Kirigami.FormData.label: i18n("Active in tray:")
-        enabled: trayModeCombo.currentValue === "selected-provider" && providerModel.count > 0
-        textRole: "displayName"
-        valueRole: "providerId"
-        model: providerModel
-        onActivated: cfg_trayProvider = currentValue
-    }
-
-    ColumnLayout {
-        Kirigami.FormData.label: i18n("Providers:")
-        Layout.fillWidth: true
-        spacing: Kirigami.Units.smallSpacing
-
-        Text {
-            visible: providerReadError.length > 0
-            text: providerReadError
-            color: Kirigami.Theme.disabledTextColor
-            font.pixelSize: Kirigami.Theme.smallFont.pixelSize
+        QQC2.TextField {
+            id: snapshotPathField
+            Kirigami.FormData.label: i18n("Snapshot path:")
             Layout.fillWidth: true
+            placeholderText: i18n("Leave empty for $HOME/.cache/neon-codexbar/snapshot.json")
         }
 
-        Repeater {
+        QQC2.SpinBox {
+            id: warningSpin
+            Kirigami.FormData.label: i18n("Warning threshold (%):")
+            from: 1
+            to: 100
+        }
+
+        QQC2.SpinBox {
+            id: criticalSpin
+            Kirigami.FormData.label: i18n("Critical threshold (%):")
+            from: 1
+            to: 100
+        }
+
+        QQC2.SpinBox {
+            id: staleSpin
+            Kirigami.FormData.label: i18n("Snapshot stale (seconds):")
+            from: 30
+            to: 86400
+        }
+
+        QQC2.SpinBox {
+            id: deadSpin
+            Kirigami.FormData.label: i18n("Daemon dead (seconds):")
+            from: 60
+            to: 86400
+        }
+
+        QQC2.SpinBox {
+            id: pollSpin
+            Kirigami.FormData.label: i18n("Polling interval (seconds):")
+            from: 1
+            to: 300
+        }
+
+        QQC2.ComboBox {
+            id: trayModeCombo
+            Kirigami.FormData.label: i18n("Tray shows:")
+            textRole: "text"
+            valueRole: "value"
+            model: [
+                {"text": i18n("Highest usage"), "value": "highest-usage"},
+                {"text": i18n("Selected provider"), "value": "selected-provider"}
+            ]
+            onActivated: cfg_trayMode = currentValue
+        }
+
+        QQC2.ComboBox {
+            id: trayProviderCombo
+            Kirigami.FormData.label: i18n("Active in tray:")
+            enabled: trayModeCombo.currentValue === "selected-provider" && providerModel.count > 0
+            textRole: "displayName"
+            valueRole: "providerId"
             model: providerModel
-            delegate: Rectangle {
+            onActivated: cfg_trayProvider = currentValue
+        }
+
+        ColumnLayout {
+            Kirigami.FormData.label: i18n("Providers:")
+            Layout.fillWidth: true
+            spacing: Kirigami.Units.smallSpacing
+
+            Text {
+                visible: providerReadError.length > 0
+                text: providerReadError
+                color: Kirigami.Theme.disabledTextColor
+                font.pixelSize: Kirigami.Theme.smallFont.pixelSize
                 Layout.fillWidth: true
-                radius: Kirigami.Units.smallSpacing
-                color: Qt.rgba(Kirigami.Theme.textColor.r,
-                               Kirigami.Theme.textColor.g,
-                               Kirigami.Theme.textColor.b, 0.04)
-                border.color: Qt.rgba(Kirigami.Theme.textColor.r,
-                                      Kirigami.Theme.textColor.g,
-                                      Kirigami.Theme.textColor.b, 0.16)
-                implicitHeight: rowLayout.implicitHeight + Kirigami.Units.smallSpacing
+            }
 
-                RowLayout {
-                    id: rowLayout
-                    anchors.fill: parent
-                    anchors.margins: Kirigami.Units.smallSpacing
-                    spacing: Kirigami.Units.smallSpacing
+            Repeater {
+                model: providerModel
+                delegate: Rectangle {
+                    Layout.fillWidth: true
+                    radius: Kirigami.Units.smallSpacing
+                    color: Qt.rgba(Kirigami.Theme.textColor.r,
+                                   Kirigami.Theme.textColor.g,
+                                   Kirigami.Theme.textColor.b, 0.04)
+                    border.color: Qt.rgba(Kirigami.Theme.textColor.r,
+                                          Kirigami.Theme.textColor.g,
+                                          Kirigami.Theme.textColor.b, 0.16)
+                    implicitHeight: rowLayout.implicitHeight + Kirigami.Units.smallSpacing
 
-                    QQC2.ToolButton {
-                        icon.name: "go-up"
-                        display: QQC2.AbstractButton.IconOnly
-                        enabled: index > 0
-                        onClicked: moveProvider(index, index - 1)
-                        QQC2.ToolTip.text: i18n("Move up")
-                        QQC2.ToolTip.visible: hovered
-                        QQC2.ToolTip.delay: 500
-                    }
+                    RowLayout {
+                        id: rowLayout
+                        anchors.fill: parent
+                        anchors.margins: Kirigami.Units.smallSpacing
+                        spacing: Kirigami.Units.smallSpacing
 
-                    QQC2.ToolButton {
-                        icon.name: "go-down"
-                        display: QQC2.AbstractButton.IconOnly
-                        enabled: index < providerModel.count - 1
-                        onClicked: moveProvider(index, index + 1)
-                        QQC2.ToolTip.text: i18n("Move down")
-                        QQC2.ToolTip.visible: hovered
-                        QQC2.ToolTip.delay: 500
-                    }
-
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: 0
-
-                        Text {
-                            text: displayName
-                            color: Kirigami.Theme.textColor
-                            font.bold: true
-                            elide: Text.ElideRight
-                            Layout.fillWidth: true
+                        QQC2.ToolButton {
+                            icon.name: "go-up"
+                            display: QQC2.AbstractButton.IconOnly
+                            enabled: index > 0
+                            onClicked: moveProvider(index, index - 1)
+                            QQC2.ToolTip.text: i18n("Move up")
+                            QQC2.ToolTip.visible: hovered
+                            QQC2.ToolTip.delay: 500
                         }
 
-                        Text {
-                            text: {
-                                var bits = [providerId, statusText];
-                                if (sourceText) bits.push(sourceText);
-                                return bits.join(" • ");
+                        QQC2.ToolButton {
+                            icon.name: "go-down"
+                            display: QQC2.AbstractButton.IconOnly
+                            enabled: index < providerModel.count - 1
+                            onClicked: moveProvider(index, index + 1)
+                            QQC2.ToolTip.text: i18n("Move down")
+                            QQC2.ToolTip.visible: hovered
+                            QQC2.ToolTip.delay: 500
+                        }
+
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 0
+
+                            Text {
+                                text: displayName
+                                color: Kirigami.Theme.textColor
+                                font.bold: true
+                                elide: Text.ElideRight
+                                Layout.fillWidth: true
                             }
-                            color: Kirigami.Theme.disabledTextColor
-                            font.pixelSize: Kirigami.Theme.smallFont.pixelSize
-                            elide: Text.ElideRight
-                            Layout.fillWidth: true
-                        }
-                    }
 
-                    QQC2.CheckBox {
-                        checked: showInPopup
-                        text: i18n("Show")
-                        onToggled: {
-                            providerModel.setProperty(index, "showInPopup", checked);
-                            syncFromProviderModel();
+                            Text {
+                                text: {
+                                    var bits = [providerId, statusText];
+                                    if (sourceText) bits.push(sourceText);
+                                    return bits.join(" • ");
+                                }
+                                color: Kirigami.Theme.disabledTextColor
+                                font.pixelSize: Kirigami.Theme.smallFont.pixelSize
+                                elide: Text.ElideRight
+                                Layout.fillWidth: true
+                            }
                         }
-                    }
 
-                    QQC2.RadioButton {
-                        checked: cfg_trayProvider === providerId
-                        enabled: showInPopup
-                        onClicked: {
-                            cfg_trayProvider = providerId;
-                            cfg_trayMode = "selected-provider";
+                        QQC2.CheckBox {
+                            checked: showInPopup
+                            text: i18n("Show")
+                            onToggled: {
+                                providerModel.setProperty(index, "showInPopup", checked);
+                                syncFromProviderModel();
+                            }
                         }
-                        QQC2.ToolTip.text: i18n("Active in tray")
-                        QQC2.ToolTip.visible: hovered
-                        QQC2.ToolTip.delay: 500
+
+                        QQC2.RadioButton {
+                            checked: cfg_trayProvider === providerId
+                            enabled: showInPopup
+                            onClicked: {
+                                cfg_trayProvider = providerId;
+                                cfg_trayMode = "selected-provider";
+                            }
+                            QQC2.ToolTip.text: i18n("Active in tray")
+                            QQC2.ToolTip.visible: hovered
+                            QQC2.ToolTip.delay: 500
+                        }
                     }
                 }
             }
-        }
 
-        QQC2.Button {
-            text: i18n("Reload providers")
-            icon.name: "view-refresh"
-            onClicked: loadProviders()
+            QQC2.Button {
+                text: i18n("Reload providers")
+                icon.name: "view-refresh"
+                onClicked: loadProviders()
+            }
         }
     }
 }
