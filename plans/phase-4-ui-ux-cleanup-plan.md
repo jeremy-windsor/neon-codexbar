@@ -98,16 +98,42 @@ Current reset text can look noisy, especially with provider strings like:
 ResetsMay4,7am(America/Phoenix) • resets 4 May 2026 07:00:00
 ```
 
+KDE Neon QA also exposed a z.ai-specific ambiguity:
+
+```text
+1 minute window
+resets 5 May 2026 06:57:36
+```
+
+The raw snapshot for that row had `window_minutes=null`,
+`reset_description="1 minute window"`, and a far-future `resets_at`. Pairing
+those fields makes the UI imply a one-minute window resets days later, which is
+misleading. Treat that as conflicting provider metadata, not as a normal reset
+line.
+
 Recommended policy:
 
 - Prefer provider `reset_description` when it is readable.
 - If `reset_description` is cramped or machine-like, prefer formatted
   `resets_at`.
 - Avoid showing both if they duplicate the same information.
+- If `reset_description` is itself a window label (`1 minute window`,
+  `1 week window`, `5 hours window`) and `window_minutes` is missing, use it as
+  the row title and do not append `resets_at` unless CodexBar provides enough
+  matching duration data to prove the timestamp belongs to that window.
 - Format timestamps as local short date/time.
 - Consider labels like:
   - `resets today 10:01 AM`
   - `resets May 4, 7:00 AM`
+
+For z.ai, prefer showing the provider-supplied window labels directly:
+
+- `1 week window`
+- `1 minute window`
+- `5 hours window`
+
+Do not hardcode these labels globally; use them when CodexBar supplies them.
+Keep raw conflicting fields available in debug.
 
 ## Diagnostics / Debug
 
