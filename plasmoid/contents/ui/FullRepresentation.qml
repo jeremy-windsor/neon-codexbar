@@ -71,12 +71,7 @@ Item {
                 icon.name: "configure"
                 text: "Configure"
                 display: PlasmaComponents.AbstractButton.IconOnly
-                onClicked: {
-                    if (root.plasmoidItem) {
-                        var configAction = root.plasmoidItem.internalAction("configure");
-                        if (configAction) configAction.trigger();
-                    }
-                }
+                onClicked: Plasmoid.internalAction("configure").trigger()
                 QQC2.ToolTip.text: "Configure"
                 QQC2.ToolTip.visible: hovered
                 QQC2.ToolTip.delay: 500

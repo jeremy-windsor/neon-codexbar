@@ -8,6 +8,8 @@
     "Icon": "utilities-system-monitor",
     "Authors": [{"Name": "Jeremy Windsor"}],
     "Category": "System Information",
+    "Website": "https://github.com/jeremy-windsor/neon-codexbar",
+    "BugReportUrl": "https://github.com/jeremy-windsor/neon-codexbar/issues",
     "Version": "0.1.0",
     "License": "MIT"
   },

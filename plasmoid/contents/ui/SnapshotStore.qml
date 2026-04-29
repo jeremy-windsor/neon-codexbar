@@ -78,6 +78,10 @@ QtObject {
     property bool daemonDeadStale: false
     property real maxUsagePercent: 0.0
     property real trayUsagePercent: 0.0
+    property real trayPrimaryUsagePercent: 0.0
+    property real traySecondaryUsagePercent: 0.0
+    property string trayPrimaryLabel: "5h"
+    property string traySecondaryLabel: "7d"
     property string trayLabel: "max"
     property bool trayProviderMissing: false
     property string worstState: "missing"  // ok | warning | critical | error | stale | missing
@@ -125,6 +129,27 @@ QtObject {
             if (typeof cp === "number" && !isNaN(cp) && cp > maxPct) maxPct = cp;
         }
         return maxPct;
+    }
+
+    function _windowPercent(card, wantedId, wantedLabel, fallbackIndex) {
+        if (!card) return 0.0;
+        var qws = card.quota_windows || [];
+        var wantedLabelLower = wantedLabel.toLowerCase();
+        for (var i = 0; i < qws.length; ++i) {
+            var w = qws[i];
+            if (!w) continue;
+            var id = w.id ? w.id.toLowerCase() : "";
+            var label = w.window_label ? w.window_label.toLowerCase() : "";
+            if (id === wantedId || label === wantedLabelLower) {
+                var p = w.used_percent;
+                return (typeof p === "number" && !isNaN(p)) ? p : 0.0;
+            }
+        }
+        if (fallbackIndex >= 0 && fallbackIndex < qws.length) {
+            var fallback = qws[fallbackIndex].used_percent;
+            return (typeof fallback === "number" && !isNaN(fallback)) ? fallback : 0.0;
+        }
+        return 0.0;
     }
 
     function _orderedCards(sourceCards) {
@@ -176,6 +201,7 @@ QtObject {
         displayCards = _orderedCards(_visibleCards(cards));
 
         var maxPct = 0.0;
+        var maxCard = null;
         var anyError = false;
         var anyStaleCard = false;
         if (displayCards && displayCards.length) {
@@ -184,7 +210,11 @@ QtObject {
                 if (!c) continue;
                 if (c.error_message) anyError = true;
                 if (c.is_stale) anyStaleCard = true;
-                maxPct = Math.max(maxPct, _providerMaxPercent(c));
+                var cardPct = _providerMaxPercent(c);
+                if (cardPct >= maxPct) {
+                    maxPct = cardPct;
+                    maxCard = c;
+                }
             }
         }
         maxUsagePercent = maxPct;
@@ -192,6 +222,7 @@ QtObject {
         trayUsagePercent = maxPct;
         trayLabel = "max";
         trayProviderMissing = false;
+        var trayCard = maxCard;
         if (trayMode === "selected-provider" && trayProvider && trayProvider.trim().length) {
             var selectedId = trayProvider.trim().toLowerCase();
             trayProviderMissing = true;
@@ -200,11 +231,14 @@ QtObject {
                 if (card && card.provider_id && card.provider_id.toLowerCase() === selectedId) {
                     trayUsagePercent = _providerMaxPercent(card);
                     trayLabel = card.display_name || card.provider_id;
+                    trayCard = card;
                     trayProviderMissing = false;
                     break;
                 }
             }
         }
+        trayPrimaryUsagePercent = _windowPercent(trayCard, "primary", "5-hour window", 0);
+        traySecondaryUsagePercent = _windowPercent(trayCard, "secondary", "7-day window", 1);
 
         // worstState precedence: missing > error > stale > critical > warning > ok
         if (readError && readError.length) {

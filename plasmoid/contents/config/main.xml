@@ -62,7 +62,7 @@
             <default>highest-usage</default>
         </entry>
         <entry name="trayIconStyle" type="String">
-            <label>Tray icon style: percent-ring or percent-only</label>
+            <label>Tray icon style</label>
             <default>percent-ring</default>
         </entry>
     </group>

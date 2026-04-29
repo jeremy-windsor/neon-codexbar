@@ -38,7 +38,7 @@ KCM.SimpleKCM {
 
     Component.onCompleted: {
         trayModeCombo.currentIndex = cfg_trayMode === "selected-provider" ? 1 : 0;
-        trayIconStyleCombo.currentIndex = cfg_trayIconStyle === "percent-only" ? 1 : 0;
+        syncTrayIconStyleCombo();
         loadProviders();
     }
 
@@ -47,7 +47,7 @@ KCM.SimpleKCM {
     }
 
     onCfg_trayIconStyleChanged: {
-        trayIconStyleCombo.currentIndex = cfg_trayIconStyle === "percent-only" ? 1 : 0;
+        syncTrayIconStyleCombo();
     }
 
     onCfg_providerOrderChanged: loadProviders()
@@ -207,6 +207,16 @@ KCM.SimpleKCM {
         trayProviderCombo.currentIndex = providerModel.count > 0 ? 0 : -1;
     }
 
+    function syncTrayIconStyleCombo() {
+        for (var i = 0; i < trayIconStyleCombo.count; ++i) {
+            if (trayIconStyleCombo.valueAt(i) === cfg_trayIconStyle) {
+                trayIconStyleCombo.currentIndex = i;
+                return;
+            }
+        }
+        trayIconStyleCombo.currentIndex = 0;
+    }
+
     function moveProvider(from, to) {
         if (from < 0 || to < 0 || from >= providerModel.count || to >= providerModel.count) return;
         providerModel.move(from, to, 1);
@@ -277,7 +287,10 @@ KCM.SimpleKCM {
             valueRole: "value"
             model: [
                 {"text": i18n("Percent in ring"), "value": "percent-ring"},
-                {"text": i18n("Percent only"), "value": "percent-only"}
+                {"text": i18n("Percent only"), "value": "percent-only"},
+                {"text": i18n("5h / 7d bars"), "value": "two-bars"},
+                {"text": i18n("5h / 7d circles"), "value": "two-circles"},
+                {"text": i18n("5h / 7d tiles"), "value": "two-tiles"}
             ]
             onActivated: cfg_trayIconStyle = currentValue
         }
