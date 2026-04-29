@@ -353,3 +353,112 @@ KDE Neon retest items:
 
 Plan status: **complete for the v1 ship targets**. Items 4 and 5's deferred
 slices are tracked in this status section as the next iteration's queue.
+
+## Follow-up questions for Jeremy
+
+Real questions I'd want answered before building the deferred slices or
+moving to Phase 5. Most are small but they shape the implementation.
+
+### Q1 — Configure button & percent-only style: do they actually work on Neon?
+
+I shipped both blind (no Plasma session in the sandbox). Both reuse patterns
+KDE QA already validated last round, but I'd like real confirmation before
+trusting the same APIs further:
+
+- Does the Configure button in the popup header open the settings dialog?
+- Does `Tray icon style: Percent only` actually hide the ring and scale the
+  text up legibly at your normal panel height?
+
+If either fails, I want to know before I extend `internalAction()` calls to
+other actions or before I add more icon styles.
+
+### Q2 — Window picker semantics for `selected-window` mode
+
+Snapshots expose windows as both:
+
+- **index keys** — `quota_windows[0..2].id` is `"primary"` / `"secondary"`
+  / `"tertiary"`
+- **semantic labels** — `quota_windows[i].window_label` is `"5-hour window"`
+  / `"7-day window"` / `null` (z.ai's secondary)
+
+The window-picker dropdown in settings has to use one of these. Tradeoffs:
+
+- **Index (primary/secondary/tertiary):** always present, provider-agnostic,
+  but cryptic. User has to remember "primary = 5h for Codex, primary = 7d
+  for z.ai."
+- **Label (5-hour window):** friendly, but not stable across providers and
+  sometimes null. A "5-hour window" pick might match codex's primary AND
+  z.ai's tertiary depending on which provider is selected.
+
+Recommended: hybrid — show `<label> (primary/secondary/tertiary)` in the
+dropdown. When the label is null, show just the index key.
+
+**Question:** OK with the hybrid, or you want strictly one or the other?
+
+### Q3 — Hidden providers vs `highest-usage` tray
+
+Right now `displayCards` filters hidden providers, and
+`highest-usage` walks `displayCards`. So hiding a provider also stops it
+from triggering tray-color alerts.
+
+That's a real semantic choice with two reasonable answers:
+
+- **Current behavior** — hidden = invisible everywhere, including tray
+  alerts. Clean and consistent.
+- **Alternative** — hidden = invisible in the popup, but still counted in
+  `highest-usage` so tray turns red if any *enabled* provider is hot.
+
+The alternative is what most "show only my main accounts but warn me if
+anything's burning" power users probably want. Today the user has no way
+to express "I want this provider monitored but collapsed."
+
+**Question:** keep current, switch, or add a third state ("show in popup"
++ "include in tray alerts" as separate checkboxes)?
+
+### Q4 — `trayProviderMissing` indicator
+
+When tray mode is `selected-provider` and the chosen provider is gone
+(hidden or removed from snapshot), `SnapshotStore` falls back to highest
+usage and sets `trayProviderMissing = true`. Today the only place this
+surfaces is the debug block.
+
+**Question:** want a visual indicator on the compact icon (e.g., dotted
+ring border, or a small `?` overlay), or is the silent-fallback +
+debug-only signal enough?
+
+### Q5 — Bounds on KConfig SpinBoxes
+
+Current `daemonStaleThreshold` minimum is 30s, `daemonDeadThreshold` is
+60s, `pollingInterval` max is 300s. Some of these feel arbitrary now that
+we have real usage:
+
+- 30s stale threshold is shorter than a normal CodexBar fetch cycle
+  (claude alone takes ~15s). Should the floor be ~120s?
+- 300s polling interval feels like it should max higher; if the daemon
+  refresh is 300s, polling at 300s gives no headroom.
+
+**Question:** want me to revise the bounds, or are the current ones fine
+as guardrails?
+
+### Q6 — i18n in popup strings
+
+`ConfigGeneral.qml` uses `i18n("…")` for every label. The popup
+(`FullRepresentation.qml`, `ProviderCard.qml`, banners, etc.) does not —
+strings like "Refresh", "Configure", "Show debug", "snapshot unavailable"
+are bare English.
+
+Master plan §16 ("Open questions") said i18n is deferred to v0.2. With
+Phase 4 settling the popup UX, now might be the right time — or not.
+
+**Question:** wrap popup strings in `i18n()` as part of Phase 5 polish, or
+keep deferred?
+
+### Q7 — `Plasmoid.toolTipMainText` / `toolTipSubText` deprecation
+
+`main.qml` uses these with a comment noting they're deprecated in Plasma 6
+in favor of `toolTipItem`. Migration is a small change but visible in
+journalctl as warnings.
+
+**Question:** migrate now (clean journal), or defer until we want a
+richer tooltip with an icon (which is the actual reason `toolTipItem`
+exists)?
