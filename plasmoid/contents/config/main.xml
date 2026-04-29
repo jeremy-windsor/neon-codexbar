@@ -61,5 +61,9 @@
             <label>Tray display mode: highest-usage or selected-provider</label>
             <default>highest-usage</default>
         </entry>
+        <entry name="trayIconStyle" type="String">
+            <label>Tray icon style: percent-ring or percent-only</label>
+            <default>percent-ring</default>
+        </entry>
     </group>
 </kcfg>

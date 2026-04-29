@@ -291,3 +291,65 @@ Phase 4 is done when:
 - Reset text is readable and not misleading.
 - Python tests and ruff pass.
 - KDE Neon manual QA passes after reinstall.
+
+## Status — applied 2026-04-28
+
+| # | Item | Status |
+|---|---|---|
+| 1 | Fix Settings Page Loading | ✅ done in `45213db` (`KCM.SimpleKCM` root, all `cfg_*` aliases) |
+| 2 | Add Configure Button To Popup | ✅ done — `FullRepresentation` ToolButton next to Refresh; `Plasmoid.internalAction("configure").trigger()` called via `plasmoidItem` reference (same pattern that fixed compact-click last round) |
+| 3 | Provider Display Controls | ✅ done in `9b616c8` — per-provider rows with up/down/check/radio + Reload button |
+| 4 | Tray Percentage Source | ⚠️ **partial** — `highest-usage` and `selected-provider` work; `selected-window` and `two-windows` deferred (see below) |
+| 5 | Tray Icon Render Styles | ⚠️ **MVP only** — `percent-ring` (default) + `percent-only` shipped; `two-percentages` / `bars` / `circles` deferred (see below) |
+| 6 | Popup Reset Text Cleanup | ✅ done in `9b616c8` — `_looksLikeWindowLabel` regex skips redundant `resets_at` line in `QuotaWindowBar` |
+| 7 | Verification | ✅ 37/37 pytest, ruff clean (sandbox); KDE Neon manual QA on Jeremy |
+
+### Deferred items, with reasoning
+
+**Item 4 — `selected-window` / `two-windows` tray sources.** Pushed to a
+follow-up. Reasoning:
+
+- The existing `highest-usage` and `selected-provider` cover the common
+  cases. Power users wanting per-window pinning are a smaller audience.
+- `selected-window` requires a new `SnapshotStore` method to resolve "give
+  me provider X's window N percent" plus matching settings UI conditional
+  rows (only visible when source is `selected-window`/`two-windows`).
+- The plan explicitly hedges: "If a style cannot remain legible at small
+  panel heights, do not ship it yet." Two-windows in particular needs visual
+  validation we cannot do in the sandbox.
+- Designing the right window-picker UX is easier after the basic
+  percent-only style has been used and we know what's missing.
+
+**Item 5 — `two-percentages` / `bars` / `circles` icon styles.** Pushed to a
+follow-up. Reasoning:
+
+- `percent-only` (the new style) gives users an immediate "hide the ring"
+  option which is the highest-probability real ask.
+- Sandbox cannot validate visual legibility of `bars` or `circles` at
+  panel sizes. The plan says do not ship illegible styles.
+- `two-percentages` couples to `two-windows` (item 4), which is also
+  deferred. They should ship together so the source/style combination is
+  coherent.
+
+When the deferred work picks up: extend `main.xml` with `trayUsageSource`,
+`trayPrimaryWindow`, `traySecondaryWindow`; extend `SnapshotStore` with a
+`windowPercentForProvider(providerId, windowKey)` resolver; extend
+`CompactRepresentation` with the additional style cases; extend
+`ConfigGeneral` with conditional rows.
+
+### Verification this pass
+
+```
+python3 -m pytest          → 37 passed
+python3 -m ruff check .    → All checks passed
+```
+
+KDE Neon retest items:
+
+1. Click Configure button in popup header → settings dialog opens.
+2. In settings, change Tray icon style to "Percent only" → ring disappears,
+   percent text scales up. Save persists across reopen.
+3. Existing item-1 / item-3 / item-6 functionality still works (no regression).
+
+Plan status: **complete for the v1 ship targets**. Items 4 and 5's deferred
+slices are tracked in this status section as the next iteration's queue.

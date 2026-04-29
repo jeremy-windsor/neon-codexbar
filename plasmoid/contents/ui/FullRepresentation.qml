@@ -12,6 +12,10 @@ import org.kde.kirigami 2.20 as Kirigami
 Item {
     id: root
     property var store
+    // Optional PlasmoidItem reference. Same pattern as CompactRepresentation:
+    // calling `Plasmoid.foo()` from a non-PlasmoidItem-scope file does not
+    // reliably resolve to the parent applet, so we pass the instance through.
+    property var plasmoidItem
 
     Layout.minimumWidth: Kirigami.Units.gridUnit * 22
     Layout.minimumHeight: Kirigami.Units.gridUnit * 18
@@ -59,6 +63,21 @@ Item {
                 display: PlasmaComponents.AbstractButton.IconOnly
                 onClicked: if (store) store.requestRefresh()
                 QQC2.ToolTip.text: "Touch refresh sentinel"
+                QQC2.ToolTip.visible: hovered
+                QQC2.ToolTip.delay: 500
+            }
+
+            PlasmaComponents.ToolButton {
+                icon.name: "configure"
+                text: "Configure"
+                display: PlasmaComponents.AbstractButton.IconOnly
+                onClicked: {
+                    if (root.plasmoidItem) {
+                        var configAction = root.plasmoidItem.internalAction("configure");
+                        if (configAction) configAction.trigger();
+                    }
+                }
+                QQC2.ToolTip.text: "Configure"
                 QQC2.ToolTip.visible: hovered
                 QQC2.ToolTip.delay: 500
             }

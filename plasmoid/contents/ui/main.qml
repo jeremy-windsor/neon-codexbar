@@ -30,9 +30,11 @@ PlasmoidItem {
     compactRepresentation: CompactRepresentation {
         store: root.snapshotStore
         plasmoidItem: root
+        trayIconStyle: Plasmoid.configuration.trayIconStyle
     }
     fullRepresentation: FullRepresentation {
         store: root.snapshotStore
+        plasmoidItem: root
     }
 
     // toolTipMainText/toolTipSubText still parse on Plasma 6 but emit

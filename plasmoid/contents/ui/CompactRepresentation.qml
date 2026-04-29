@@ -13,6 +13,9 @@ Item {
     id: root
     property var store
     property var plasmoidItem
+    // "percent-ring" (default) draws the colored ring with centered percent.
+    // "percent-only" hides the ring and shows the percent text larger.
+    property string trayIconStyle: "percent-ring"
 
     // Left-click toggles popup. Keep this minimal and provider-agnostic.
     MouseArea {
@@ -31,6 +34,10 @@ Item {
     Layout.preferredWidth: Kirigami.Units.iconSizes.medium
     Layout.preferredHeight: Kirigami.Units.iconSizes.medium
 
+    readonly property int _dim: Math.min(parent ? parent.width : width,
+                                          parent ? parent.height : height) - 2
+    readonly property bool _showRing: trayIconStyle !== "percent-only"
+
     readonly property color ringColor: {
         if (!store) return Kirigami.Theme.textColor;
         switch (store.worstState) {
@@ -44,11 +51,13 @@ Item {
         }
     }
 
-    // The ring. Drawn as a circle outline; size scales with the panel icon.
+    // The ring. Hidden in percent-only mode; the text below scales up to
+    // fill the freed space.
     Rectangle {
         id: ring
+        visible: root._showRing
         anchors.centerIn: parent
-        width: Math.min(parent.width, parent.height) - 2
+        width: root._dim
         height: width
         radius: width / 2
         color: "transparent"
@@ -67,7 +76,12 @@ Item {
             return Math.round(store.trayUsagePercent) + "";
         }
         color: ringColor
-        font.pixelSize: Math.max(8, Math.round(ring.width / 2.6))
+        // Scale up text in percent-only mode since the ring no longer
+        // constrains the inner space.
+        font.pixelSize: {
+            var divisor = root._showRing ? 2.6 : 1.6;
+            return Math.max(8, Math.round(root._dim / divisor));
+        }
         font.bold: true
     }
 }

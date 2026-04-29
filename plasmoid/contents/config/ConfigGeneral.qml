@@ -20,6 +20,7 @@ KCM.SimpleKCM {
     property string cfg_hiddenProviders: ""
     property string cfg_trayProvider: ""
     property string cfg_trayMode: "highest-usage"
+    property string cfg_trayIconStyle: "percent-ring"
 
     readonly property string _homeDir: {
         var url = Labs.StandardPaths.writableLocation(Labs.StandardPaths.HomeLocation);
@@ -37,11 +38,16 @@ KCM.SimpleKCM {
 
     Component.onCompleted: {
         trayModeCombo.currentIndex = cfg_trayMode === "selected-provider" ? 1 : 0;
+        trayIconStyleCombo.currentIndex = cfg_trayIconStyle === "percent-only" ? 1 : 0;
         loadProviders();
     }
 
     onCfg_trayModeChanged: {
         trayModeCombo.currentIndex = cfg_trayMode === "selected-provider" ? 1 : 0;
+    }
+
+    onCfg_trayIconStyleChanged: {
+        trayIconStyleCombo.currentIndex = cfg_trayIconStyle === "percent-only" ? 1 : 0;
     }
 
     onCfg_providerOrderChanged: loadProviders()
@@ -262,6 +268,18 @@ KCM.SimpleKCM {
                 {"text": i18n("Selected provider"), "value": "selected-provider"}
             ]
             onActivated: cfg_trayMode = currentValue
+        }
+
+        QQC2.ComboBox {
+            id: trayIconStyleCombo
+            Kirigami.FormData.label: i18n("Tray icon style:")
+            textRole: "text"
+            valueRole: "value"
+            model: [
+                {"text": i18n("Percent in ring"), "value": "percent-ring"},
+                {"text": i18n("Percent only"), "value": "percent-only"}
+            ]
+            onActivated: cfg_trayIconStyle = currentValue
         }
 
         QQC2.ComboBox {
