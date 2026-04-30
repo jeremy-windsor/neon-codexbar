@@ -23,6 +23,7 @@ DISPLAY_NAMES: dict[str, str] = {
 }
 
 _WINDOW_KEYS = ("primary", "secondary", "tertiary")
+_ZAI_UNRELIABLE_WINDOW_LABELS = {"1 minute window"}
 
 # OpenRouter exposes credit balance as loginMethod (for example, "Balance: $74.50").
 # That string is useful as a login method, but it is not a subscription plan name.
@@ -116,11 +117,24 @@ def _normalize_window(
     )
 
 
-def _quota_windows(usage: JsonDict) -> list[QuotaWindow]:
+def _is_unreliable_quota_window(provider_id: str, raw_window: JsonDict) -> bool:
+    """Drop known provider metadata that does not represent a useful quota."""
+
+    reset_description = raw_window.get("resetDescription")
+    if provider_id != "zai" or not isinstance(reset_description, str):
+        return False
+
+    return (
+        raw_window.get("windowMinutes") is None
+        and reset_description.strip().lower() in _ZAI_UNRELIABLE_WINDOW_LABELS
+    )
+
+
+def _quota_windows(provider_id: str, usage: JsonDict) -> list[QuotaWindow]:
     windows: list[QuotaWindow] = []
     for key in _WINDOW_KEYS:
         raw_window = _as_dict(usage.get(key))
-        if not raw_window:
+        if not raw_window or _is_unreliable_quota_window(provider_id, raw_window):
             continue
         windows.append(
             _normalize_window(
@@ -303,7 +317,7 @@ def normalize_payload(
         identity=identity,
         plan=plan,
         login_method=login_method,
-        quota_windows=_quota_windows(usage),
+        quota_windows=_quota_windows(provider_id, usage),
         credit_meters=_credit_meters(payload, usage),
         model_usage=_model_usage(payload, usage),
         error_message=error_message,

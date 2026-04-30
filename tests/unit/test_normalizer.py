@@ -43,14 +43,13 @@ def test_normalizer_handles_claude_primary_secondary_windows() -> None:
     assert card.quota_windows[1].window_label == "7-day window"
 
 
-def test_normalizer_handles_zai_primary_secondary_tertiary_windows() -> None:
+def test_normalizer_handles_zai_reliable_quota_windows() -> None:
     card = _normalize("zai_api_success.json")
 
     assert card.provider_id == "zai"
-    assert [window.id for window in card.quota_windows] == ["primary", "secondary", "tertiary"]
+    assert [window.id for window in card.quota_windows] == ["primary", "tertiary"]
     assert [window.window_label for window in card.quota_windows] == [
         "7-day window",
-        None,
         "5-hour window",
     ]
     assert card.credit_meters == []
@@ -74,16 +73,12 @@ def test_normalizer_handles_openrouter_credit_balance_without_fake_windows() -> 
     assert key_meter.used == 1.09768035
 
 
-def test_normalizer_handles_zai_secondary_without_window_minutes() -> None:
-    """z.ai live payload omits windowMinutes from the secondary window."""
+def test_normalizer_drops_zai_unreliable_one_minute_window() -> None:
+    """z.ai reports a one-minute window without enough metadata to display."""
 
     card = _normalize("zai_api_success.json")
 
-    secondary = next(window for window in card.quota_windows if window.id == "secondary")
-    assert secondary.window_minutes is None
-    assert secondary.reset_description == "1 minute window"
-    assert secondary.resets_at is not None
-    assert secondary.used_percent == 1.0999999999999999
+    assert all(window.id != "secondary" for window in card.quota_windows)
 
 
 def test_normalizer_handles_error_payload() -> None:

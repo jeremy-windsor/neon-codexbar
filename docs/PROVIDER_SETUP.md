@@ -93,10 +93,11 @@ export Z_AI_API_KEY=...
 codexbar usage --provider zai --source api --format json --pretty
 ```
 
-Returns 3 quota windows (1wk / 1min / 5h).
+Returns quota metadata for the documented Coding Plan limits.
 
-- The `secondary` (1-minute) window omits `windowMinutes` entirely. Read the
-  label from `resetDescription` instead.
+- z.ai may report a `secondary` row as `1 minute window` while omitting
+  `windowMinutes`. That row does not match the documented 5-hour, weekly, or
+  MCP monthly limits and is ignored by the normalizer.
 - `usedPercent` may be float-noisy (e.g. `1.0999999999999999`). Round in the
   UI.
 
