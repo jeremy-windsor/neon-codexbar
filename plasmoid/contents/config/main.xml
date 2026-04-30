@@ -69,5 +69,9 @@
             <label>Usage value for single percent tray icons: highest, primary, or secondary</label>
             <default>highest</default>
         </entry>
+        <entry name="trayShowProvider" type="Bool">
+            <label>Show provider name in the tray widget</label>
+            <default>false</default>
+        </entry>
     </group>
 </kcfg>

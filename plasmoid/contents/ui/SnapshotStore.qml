@@ -220,7 +220,7 @@ QtObject {
         maxUsagePercent = maxPct;
 
         trayUsagePercent = maxPct;
-        trayLabel = "max";
+        trayLabel = maxCard ? (maxCard.display_name || maxCard.provider_id || "max") : "max";
         trayProviderMissing = false;
         var trayCard = maxCard;
         if (trayMode === "selected-provider" && trayProvider && trayProvider.trim().length) {

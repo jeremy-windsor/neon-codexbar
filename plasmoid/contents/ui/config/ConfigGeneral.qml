@@ -22,6 +22,7 @@ KCM.SimpleKCM {
     property string cfg_trayMode: "highest-usage"
     property string cfg_trayIconStyle: "percent-ring"
     property string cfg_traySingleWindow: "highest"
+    property alias cfg_trayShowProvider: trayShowProviderCheck.checked
 
     readonly property string _homeDir: {
         var url = Labs.StandardPaths.writableLocation(Labs.StandardPaths.HomeLocation);
@@ -324,6 +325,12 @@ KCM.SimpleKCM {
                 {"text": i18n("7-day window"), "value": "secondary"}
             ]
             onActivated: cfg_traySingleWindow = currentValue
+        }
+
+        QQC2.CheckBox {
+            id: trayShowProviderCheck
+            Kirigami.FormData.label: i18n("Tray label:")
+            text: i18n("Show provider")
         }
 
         QQC2.ComboBox {

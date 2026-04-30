@@ -19,6 +19,7 @@ Item {
     // usage as side-by-side mini widgets.
     property string trayIconStyle: "percent-ring"
     property string traySingleWindow: "highest"
+    property bool trayShowProvider: false
 
     property var _windowItems: [
         {
@@ -45,18 +46,28 @@ Item {
     // Plasma sizes panel icons via Layout hints; honor them.
     Layout.minimumWidth: Kirigami.Units.iconSizes.small
     Layout.minimumHeight: Kirigami.Units.iconSizes.small
-    Layout.preferredWidth: root._showMulti
-        ? Kirigami.Units.iconSizes.medium * 2.7
-        : Kirigami.Units.iconSizes.medium
+    Layout.preferredWidth: root._basePreferredWidth + root._providerLabelWidth
     Layout.preferredHeight: Kirigami.Units.iconSizes.medium
 
-    readonly property int _dim: Math.min(parent ? parent.width : width,
+    readonly property int _providerLabelWidth: _showProviderLabel
+        ? Math.min(providerLabel.implicitWidth + Kirigami.Units.smallSpacing,
+                   Kirigami.Units.gridUnit * 4)
+        : 0
+    readonly property int _basePreferredWidth: root._showMulti
+        ? Kirigami.Units.iconSizes.medium * 2.7
+        : Kirigami.Units.iconSizes.medium
+    readonly property int _visualWidth: Math.max(Kirigami.Units.iconSizes.small,
+                                                 (parent ? parent.width : width) - _providerLabelWidth)
+    readonly property real _visualCenterOffset: _providerLabelWidth / 2
+    readonly property int _dim: Math.min(_visualWidth,
                                           parent ? parent.height : height) - 2
     readonly property bool _showRing: trayIconStyle === "percent-ring"
     readonly property bool _showBars: trayIconStyle === "two-bars"
     readonly property bool _showCircles: trayIconStyle === "two-circles"
     readonly property bool _showTiles: trayIconStyle === "two-tiles"
     readonly property bool _showMulti: _showBars || _showCircles || _showTiles
+    readonly property bool _showProviderLabel: trayShowProvider && store && store.trayLabel
+                                            && store.trayLabel !== "max"
     readonly property real _singleUsagePercent: {
         if (!store) return 0;
         if (traySingleWindow === "primary") return store.trayPrimaryUsagePercent;
@@ -79,10 +90,26 @@ Item {
     onRingColorChanged: ring.requestPaint()
     on_SingleUsagePercentChanged: ring.requestPaint()
 
+    Text {
+        id: providerLabel
+        visible: root._showProviderLabel
+        anchors.left: parent.left
+        anchors.verticalCenter: parent.verticalCenter
+        width: root._providerLabelWidth
+        text: store ? store.trayLabel : ""
+        color: ringColor
+        font.pixelSize: Math.max(9, Math.round(root._dim / 3.6))
+        font.bold: true
+        elide: Text.ElideRight
+        horizontalAlignment: Text.AlignLeft
+        verticalAlignment: Text.AlignVCenter
+    }
+
     Canvas {
         id: ring
         visible: root._showRing
         anchors.centerIn: parent
+        anchors.horizontalCenterOffset: root._visualCenterOffset
         width: root._dim
         height: width
         antialiasing: true
@@ -118,6 +145,7 @@ Item {
     Text {
         visible: !root._showMulti
         anchors.centerIn: parent
+        anchors.horizontalCenterOffset: root._visualCenterOffset
         text: {
             if (!store) return "";
             if (store.worstState === "missing" || store.worstState === "error") return "!";
@@ -137,7 +165,8 @@ Item {
     ColumnLayout {
         visible: root._showBars
         anchors.centerIn: parent
-        width: Math.max(54, parent.width - 2)
+        anchors.horizontalCenterOffset: root._visualCenterOffset
+        width: Math.max(54, root._visualWidth - 2)
         spacing: 1
 
         Repeater {
@@ -194,7 +223,8 @@ Item {
     RowLayout {
         visible: root._showCircles
         anchors.centerIn: parent
-        width: Math.max(52, parent.width - 2)
+        anchors.horizontalCenterOffset: root._visualCenterOffset
+        width: Math.max(52, root._visualWidth - 2)
         height: Math.max(18, parent.height - 2)
         spacing: 2
 
@@ -247,7 +277,8 @@ Item {
     RowLayout {
         visible: root._showTiles
         anchors.centerIn: parent
-        width: Math.max(50, parent.width - 2)
+        anchors.horizontalCenterOffset: root._visualCenterOffset
+        width: Math.max(50, root._visualWidth - 2)
         height: Math.max(18, parent.height - 2)
         spacing: 1
 

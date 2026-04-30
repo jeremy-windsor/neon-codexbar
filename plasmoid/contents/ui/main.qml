@@ -32,6 +32,7 @@ PlasmoidItem {
         plasmoidItem: root
         trayIconStyle: Plasmoid.configuration.trayIconStyle
         traySingleWindow: Plasmoid.configuration.traySingleWindow
+        trayShowProvider: Plasmoid.configuration.trayShowProvider
     }
     fullRepresentation: FullRepresentation {
         store: root.snapshotStore
