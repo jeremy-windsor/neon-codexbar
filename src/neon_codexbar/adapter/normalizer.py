@@ -166,6 +166,14 @@ def _quota_windows(provider_id: str, usage: JsonDict) -> list[QuotaWindow]:
             _normalize_window(window_id=window_id, window_label=title, raw_window=raw_window)
         )
 
+    if provider_id == "zai":
+        windows.sort(
+            key=lambda window: (
+                window.window_minutes is None,
+                window.window_minutes or 0,
+            )
+        )
+
     return windows
 
 

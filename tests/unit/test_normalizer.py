@@ -47,10 +47,10 @@ def test_normalizer_handles_zai_reliable_quota_windows() -> None:
     card = _normalize("zai_api_success.json")
 
     assert card.provider_id == "zai"
-    assert [window.id for window in card.quota_windows] == ["primary", "tertiary"]
+    assert [window.id for window in card.quota_windows] == ["tertiary", "primary"]
     assert [window.window_label for window in card.quota_windows] == [
-        "7-day window",
         "5-hour window",
+        "7-day window",
     ]
     assert card.credit_meters == []
 
