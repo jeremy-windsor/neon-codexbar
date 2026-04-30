@@ -18,6 +18,7 @@ Item {
     // "two-bars", "two-circles", and "two-tiles" show 5-hour and 7-day
     // usage as side-by-side mini widgets.
     property string trayIconStyle: "percent-ring"
+    property string traySingleWindow: "highest"
 
     property var _windowItems: [
         {
@@ -45,7 +46,7 @@ Item {
     Layout.minimumWidth: Kirigami.Units.iconSizes.small
     Layout.minimumHeight: Kirigami.Units.iconSizes.small
     Layout.preferredWidth: root._showMulti
-        ? Kirigami.Units.iconSizes.medium * 3.2
+        ? Kirigami.Units.iconSizes.medium * 2.7
         : Kirigami.Units.iconSizes.medium
     Layout.preferredHeight: Kirigami.Units.iconSizes.medium
 
@@ -56,6 +57,12 @@ Item {
     readonly property bool _showCircles: trayIconStyle === "two-circles"
     readonly property bool _showTiles: trayIconStyle === "two-tiles"
     readonly property bool _showMulti: _showBars || _showCircles || _showTiles
+    readonly property real _singleUsagePercent: {
+        if (!store) return 0;
+        if (traySingleWindow === "primary") return store.trayPrimaryUsagePercent;
+        if (traySingleWindow === "secondary") return store.traySecondaryUsagePercent;
+        return store.trayUsagePercent;
+    }
 
     readonly property color ringColor: {
         if (!store) return Kirigami.Theme.textColor;
@@ -69,20 +76,42 @@ Item {
         default:         return Kirigami.Theme.positiveTextColor;
         }
     }
+    onRingColorChanged: ring.requestPaint()
+    on_SingleUsagePercentChanged: ring.requestPaint()
 
-    // The ring. Hidden in percent-only mode; the text below scales up to
-    // fill the freed space.
-    Rectangle {
+    Canvas {
         id: ring
         visible: root._showRing
         anchors.centerIn: parent
         width: root._dim
         height: width
-        radius: width / 2
-        color: "transparent"
-        border.color: ringColor
-        border.width: Math.max(2, Math.round(width / 8))
         antialiasing: true
+
+        onPaint: {
+            var ctx = getContext("2d");
+            ctx.reset();
+            var lineWidth = Math.max(2, Math.round(width / 8));
+            var radius = width / 2 - lineWidth / 2;
+            var center = width / 2;
+            var start = -Math.PI / 2;
+            var pct = Math.max(0, Math.min(100, root._singleUsagePercent)) / 100.0;
+
+            ctx.lineWidth = lineWidth;
+            ctx.lineCap = "round";
+            ctx.strokeStyle = Qt.rgba(Kirigami.Theme.textColor.r,
+                                      Kirigami.Theme.textColor.g,
+                                      Kirigami.Theme.textColor.b, 0.18);
+            ctx.beginPath();
+            ctx.arc(center, center, radius, 0, Math.PI * 2, false);
+            ctx.stroke();
+
+            if (pct > 0) {
+                ctx.strokeStyle = root.ringColor;
+                ctx.beginPath();
+                ctx.arc(center, center, radius, start, start + Math.PI * 2 * pct, false);
+                ctx.stroke();
+            }
+        }
     }
 
     // Center label: max usage percent, or "!" if no data.
@@ -93,7 +122,7 @@ Item {
             if (!store) return "";
             if (store.worstState === "missing" || store.worstState === "error") return "!";
             if (!store.cards || store.cards.length === 0) return "-";
-            return Math.round(store.trayUsagePercent) + "";
+            return Math.round(root._singleUsagePercent) + "";
         }
         color: ringColor
         // Scale up text in percent-only mode since the ring no longer
@@ -108,7 +137,7 @@ Item {
     ColumnLayout {
         visible: root._showBars
         anchors.centerIn: parent
-        width: Math.max(64, parent.width - 4)
+        width: Math.max(54, parent.width - 2)
         spacing: 1
 
         Repeater {
@@ -120,44 +149,42 @@ Item {
 
                 RowLayout {
                     Layout.fillWidth: true
-                    spacing: 2
+                    spacing: 3
 
                     Text {
                         text: modelData.label
                         color: ringColor
-                        font.pixelSize: Math.max(6, Math.round(root._dim / 5.0))
+                        font.pixelSize: Math.max(9, Math.round(root._dim / 3.7))
                         font.bold: true
-                        Layout.preferredWidth: Math.max(10, Math.round(root._dim / 2.8))
+                        Layout.preferredWidth: Math.max(16, Math.round(root._dim / 1.9))
                         horizontalAlignment: Text.AlignRight
+                    }
+
+                    Rectangle {
+                        Layout.fillWidth: true
+                        height: Math.max(4, Math.round(root._dim / 6.2))
+                        radius: height / 2
+                        color: Qt.rgba(Kirigami.Theme.textColor.r,
+                                       Kirigami.Theme.textColor.g,
+                                       Kirigami.Theme.textColor.b, 0.18)
+
+                        Rectangle {
+                            anchors.left: parent.left
+                            anchors.top: parent.top
+                            anchors.bottom: parent.bottom
+                            width: parent.width * (Math.max(0, Math.min(100, modelData.percent)) / 100.0)
+                            radius: parent.radius
+                            color: ringColor
+                        }
                     }
 
                     Text {
                         text: Math.round(modelData.percent) + "%"
                         color: ringColor
-                        font.pixelSize: Math.max(6, Math.round(root._dim / 5.0))
+                        font.pixelSize: Math.max(9, Math.round(root._dim / 3.7))
                         font.bold: true
-                        Layout.fillWidth: true
+                        Layout.preferredWidth: Math.max(22, Math.round(root._dim / 1.4))
                         horizontalAlignment: Text.AlignLeft
-                    }
-                }
-
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.leftMargin: 1
-                    Layout.rightMargin: 1
-                    height: Math.max(3, Math.round(root._dim / 7))
-                    radius: height / 2
-                    color: Qt.rgba(Kirigami.Theme.textColor.r,
-                                   Kirigami.Theme.textColor.g,
-                                   Kirigami.Theme.textColor.b, 0.18)
-
-                    Rectangle {
-                        anchors.left: parent.left
-                        anchors.top: parent.top
-                        anchors.bottom: parent.bottom
-                        width: parent.width * (Math.max(0, Math.min(100, modelData.percent)) / 100.0)
-                        radius: parent.radius
-                        color: ringColor
                     }
                 }
             }
@@ -167,48 +194,51 @@ Item {
     RowLayout {
         visible: root._showCircles
         anchors.centerIn: parent
-        width: Math.max(64, parent.width - 4)
+        width: Math.max(52, parent.width - 2)
         height: Math.max(18, parent.height - 2)
         spacing: 2
 
         Repeater {
             model: root._windowItems
 
-            delegate: Item {
+            delegate: RowLayout {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                Layout.minimumWidth: 28
-
-                Rectangle {
-                    id: circle
-                    anchors.centerIn: parent
-                    width: Math.min(parent.width, parent.height) - 3
-                    height: width
-                    radius: width / 2
-                    color: "transparent"
-                    border.color: ringColor
-                    border.width: Math.max(2, Math.round(width / 10))
-                    antialiasing: true
-                }
+                Layout.minimumWidth: 25
+                spacing: 1
 
                 Text {
-                    anchors.horizontalCenter: circle.horizontalCenter
-                    anchors.verticalCenter: circle.verticalCenter
-                    anchors.verticalCenterOffset: -Math.max(2, Math.round(circle.width / 10))
-                    text: Math.round(modelData.percent)
-                    color: ringColor
-                    font.pixelSize: Math.max(7, Math.round(circle.width / 3.8))
-                    font.bold: true
-                }
-
-                Text {
-                    anchors.horizontalCenter: circle.horizontalCenter
-                    anchors.bottom: circle.bottom
-                    anchors.bottomMargin: Math.max(1, Math.round(circle.width / 10))
                     text: modelData.label
                     color: ringColor
-                    font.pixelSize: Math.max(5, Math.round(circle.width / 6.2))
+                    font.pixelSize: Math.max(10, Math.round(root._dim / 3.5))
                     font.bold: true
+                    Layout.alignment: Qt.AlignVCenter
+                }
+
+                Item {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    Layout.minimumWidth: 16
+
+                    Rectangle {
+                        id: circle
+                        anchors.centerIn: parent
+                        width: Math.min(parent.width, parent.height) - 2
+                        height: width
+                        radius: width / 2
+                        color: "transparent"
+                        border.color: ringColor
+                        border.width: Math.max(2, Math.round(width / 10))
+                        antialiasing: true
+                    }
+
+                    Text {
+                        anchors.centerIn: circle
+                        text: Math.round(modelData.percent)
+                        color: ringColor
+                        font.pixelSize: Math.max(8, Math.round(circle.width / 3.2))
+                        font.bold: true
+                    }
                 }
             }
         }
@@ -217,9 +247,9 @@ Item {
     RowLayout {
         visible: root._showTiles
         anchors.centerIn: parent
-        width: Math.max(64, parent.width - 4)
+        width: Math.max(50, parent.width - 2)
         height: Math.max(18, parent.height - 2)
-        spacing: 2
+        spacing: 1
 
         Repeater {
             model: root._windowItems
@@ -227,7 +257,7 @@ Item {
             delegate: Rectangle {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                Layout.minimumWidth: 28
+                Layout.minimumWidth: 23
                 radius: 3
                 color: Qt.rgba(Kirigami.Theme.textColor.r,
                                Kirigami.Theme.textColor.g,
@@ -242,7 +272,7 @@ Item {
                     Text {
                         text: modelData.label
                         color: ringColor
-                        font.pixelSize: Math.max(6, Math.round(root._dim / 5.2))
+                        font.pixelSize: Math.max(8, Math.round(root._dim / 4.2))
                         font.bold: true
                         Layout.alignment: Qt.AlignHCenter
                     }
@@ -250,7 +280,7 @@ Item {
                     Text {
                         text: Math.round(modelData.percent) + "%"
                         color: ringColor
-                        font.pixelSize: Math.max(8, Math.round(root._dim / 3.8))
+                        font.pixelSize: Math.max(9, Math.round(root._dim / 3.5))
                         font.bold: true
                         Layout.alignment: Qt.AlignHCenter
                     }

@@ -65,5 +65,9 @@
             <label>Tray icon style</label>
             <default>percent-ring</default>
         </entry>
+        <entry name="traySingleWindow" type="String">
+            <label>Usage value for single percent tray icons: highest, primary, or secondary</label>
+            <default>highest</default>
+        </entry>
     </group>
 </kcfg>

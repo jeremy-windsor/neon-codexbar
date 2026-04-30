@@ -21,6 +21,7 @@ KCM.SimpleKCM {
     property string cfg_trayProvider: ""
     property string cfg_trayMode: "highest-usage"
     property string cfg_trayIconStyle: "percent-ring"
+    property string cfg_traySingleWindow: "highest"
 
     readonly property string _homeDir: {
         var url = Labs.StandardPaths.writableLocation(Labs.StandardPaths.HomeLocation);
@@ -39,6 +40,7 @@ KCM.SimpleKCM {
     Component.onCompleted: {
         trayModeCombo.currentIndex = cfg_trayMode === "selected-provider" ? 1 : 0;
         syncTrayIconStyleCombo();
+        syncTraySingleWindowCombo();
         loadProviders();
     }
 
@@ -48,6 +50,10 @@ KCM.SimpleKCM {
 
     onCfg_trayIconStyleChanged: {
         syncTrayIconStyleCombo();
+    }
+
+    onCfg_traySingleWindowChanged: {
+        syncTraySingleWindowCombo();
     }
 
     onCfg_providerOrderChanged: loadProviders()
@@ -217,6 +223,16 @@ KCM.SimpleKCM {
         trayIconStyleCombo.currentIndex = 0;
     }
 
+    function syncTraySingleWindowCombo() {
+        for (var i = 0; i < traySingleWindowCombo.count; ++i) {
+            if (traySingleWindowCombo.valueAt(i) === cfg_traySingleWindow) {
+                traySingleWindowCombo.currentIndex = i;
+                return;
+            }
+        }
+        traySingleWindowCombo.currentIndex = 0;
+    }
+
     function moveProvider(from, to) {
         if (from < 0 || to < 0 || from >= providerModel.count || to >= providerModel.count) return;
         providerModel.move(from, to, 1);
@@ -293,6 +309,21 @@ KCM.SimpleKCM {
                 {"text": i18n("5h / 7d tiles"), "value": "two-tiles"}
             ]
             onActivated: cfg_trayIconStyle = currentValue
+        }
+
+        QQC2.ComboBox {
+            id: traySingleWindowCombo
+            Kirigami.FormData.label: i18n("Single icon shows:")
+            enabled: trayIconStyleCombo.currentValue === "percent-ring"
+                     || trayIconStyleCombo.currentValue === "percent-only"
+            textRole: "text"
+            valueRole: "value"
+            model: [
+                {"text": i18n("Highest usage"), "value": "highest"},
+                {"text": i18n("5-hour window"), "value": "primary"},
+                {"text": i18n("7-day window"), "value": "secondary"}
+            ]
+            onActivated: cfg_traySingleWindow = currentValue
         }
 
         QQC2.ComboBox {

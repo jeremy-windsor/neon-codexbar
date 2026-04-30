@@ -16,6 +16,24 @@ Item {
     // calling `Plasmoid.foo()` from a non-PlasmoidItem-scope file does not
     // reliably resolve to the parent applet, so we pass the instance through.
     property var plasmoidItem
+    property string selectedProviderFilter: "all"
+
+    function filteredCards() {
+        var cards = store && store.displayCards ? store.displayCards : [];
+        if (selectedProviderFilter === "all") return cards;
+        return cards.filter(function(card) {
+            return card && card.provider_id === selectedProviderFilter;
+        });
+    }
+
+    function providerButtonText(card) {
+        if (!card) return "";
+        var name = card.display_name || card.provider_id || "";
+        var pct = store && store._providerMaxPercent
+            ? Math.round(store._providerMaxPercent(card))
+            : 0;
+        return name + " " + pct + "%";
+    }
 
     Layout.minimumWidth: Kirigami.Units.gridUnit * 22
     Layout.minimumHeight: Kirigami.Units.gridUnit * 18
@@ -107,6 +125,44 @@ Item {
             severity: "warning"
         }
 
+        // ----- Provider filter -----
+        Flickable {
+            visible: store && store.displayCards && store.displayCards.length > 1
+            Layout.fillWidth: true
+            implicitHeight: providerFilterRow.implicitHeight
+            contentWidth: providerFilterRow.implicitWidth
+            contentHeight: providerFilterRow.implicitHeight
+            clip: true
+            boundsBehavior: Flickable.StopAtBounds
+
+            RowLayout {
+                id: providerFilterRow
+                spacing: Kirigami.Units.smallSpacing
+
+                PlasmaComponents.ToolButton {
+                    text: "All"
+                    checkable: true
+                    checked: root.selectedProviderFilter === "all"
+                    flat: !checked
+                    onClicked: root.selectedProviderFilter = "all"
+                }
+
+                Repeater {
+                    model: store ? store.displayCards : []
+
+                    delegate: PlasmaComponents.ToolButton {
+                        text: root.providerButtonText(modelData)
+                        checkable: true
+                        checked: modelData && root.selectedProviderFilter === modelData.provider_id
+                        flat: !checked
+                        onClicked: if (modelData && modelData.provider_id) {
+                            root.selectedProviderFilter = modelData.provider_id;
+                        }
+                    }
+                }
+            }
+        }
+
         QQC2.ScrollView {
             id: scroll
             Layout.fillWidth: true
@@ -121,7 +177,7 @@ Item {
                 spacing: Kirigami.Units.smallSpacing
 
                 Repeater {
-                    model: store ? store.displayCards : []
+                    model: root.filteredCards()
                     delegate: ProviderCard {
                         card: modelData
                         store: root.store
