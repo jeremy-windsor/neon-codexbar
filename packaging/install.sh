@@ -57,6 +57,8 @@ UNIT_DEST="${USER_UNIT_DIR}/neon-codexbar.service"
 PLASMOID_ID="org.jeremywindsor.neon-codexbar"
 CODEXBAR_CONFIG_DIR="${HOME}/.codexbar"
 CODEXBAR_CONFIG="${CODEXBAR_CONFIG_DIR}/config.json"
+ENVIRONMENT_DIR="${HOME}/.config/environment.d"
+ENVIRONMENT_FILE="${ENVIRONMENT_DIR}/90-neon-codexbar.conf"
 
 # --- helpers -------------------------------------------------------------------
 die() {
@@ -251,10 +253,24 @@ info "Daemon enabled and started"
 # --- step 5: enable QML XHR file:// reads --------------------------------------
 # Plasma 6 disables file:// XHR by default. The plasmoid reads
 # ~/.cache/neon-codexbar/snapshot.json via XMLHttpRequest, so it needs
-# QML_XHR_ALLOW_FILE_READ=1 in plasmashell's environment. Set it in the user
-# systemd manager AND broadcast it to dbus-activated apps so the next
-# plasmashell launch inherits it.
+# QML_XHR_ALLOW_FILE_READ=1 in plasmashell's environment. Write a managed
+# environment.d file for future logins, then update the current user manager and
+# dbus activation environment for this session.
 info "Enabling QML XHR file reads for plasmashell (QML_XHR_ALLOW_FILE_READ=1)"
+
+mkdir -p "${ENVIRONMENT_DIR}" \
+  || die "Could not create ${ENVIRONMENT_DIR}"
+
+cat > "${ENVIRONMENT_FILE}" <<'EOF'
+# Managed by neon-codexbar. Required so the Plasma widget can read its
+# user-owned snapshot file via QML XMLHttpRequest.
+QML_XHR_ALLOW_FILE_READ=1
+EOF
+
+chmod 0644 "${ENVIRONMENT_FILE}" \
+  || die "Could not set permissions on ${ENVIRONMENT_FILE}"
+
+info "Persistent environment installed at ${ENVIRONMENT_FILE}"
 
 if ! systemctl --user set-environment QML_XHR_ALLOW_FILE_READ=1 2>/dev/null; then
   warn "systemctl --user set-environment failed; plasmashell may need it set manually"
@@ -275,23 +291,38 @@ else
   warn "Could not confirm QML_XHR_ALLOW_FILE_READ=1 in systemctl --user show-environment"
 fi
 
+if grep -qF 'QML_XHR_ALLOW_FILE_READ=1' "${ENVIRONMENT_FILE}" 2>/dev/null; then
+  info "QML_XHR_ALLOW_FILE_READ=1 will persist for future logins"
+else
+  warn "Could not confirm QML_XHR_ALLOW_FILE_READ=1 in ${ENVIRONMENT_FILE}"
+fi
+
 # --- step 6: optional plasmashell restart --------------------------------------
 # plasmashell only inherits the new env var when it (re)starts. Without a
-# restart the env var is set for future logins but the running widget will
-# still hit the file-read block. Restart is destructive (closes/reopens
-# panels), so we make it opt-in via --restart-plasma.
+# restart the running widget will still hit the file-read block. Restart is
+# destructive (closes/reopens panels), so we make it opt-in via
+# --restart-plasma.
 if [[ "${RESTART_PLASMA}" -eq 1 ]]; then
   info "Restarting plasmashell to apply env var (panels will reload)"
-  if command -v kquitapp6 >/dev/null 2>&1; then
+  if systemctl --user list-unit-files plasma-plasmashell.service >/dev/null 2>&1; then
+    systemctl --user restart plasma-plasmashell.service \
+      || warn "systemctl --user restart plasma-plasmashell.service failed"
+  elif command -v kquitapp6 >/dev/null 2>&1; then
     kquitapp6 plasmashell >/dev/null 2>&1 || true
-  fi
-  if command -v kstart >/dev/null 2>&1; then
-    # kstart returns immediately; plasmashell respawns in the background.
-    kstart plasmashell >/dev/null 2>&1 &
+    if command -v kstart >/dev/null 2>&1; then
+      # kstart returns immediately; plasmashell respawns in the background.
+      kstart plasmashell >/dev/null 2>&1 &
+      disown
+      info "plasmashell restart issued"
+    else
+      warn "kstart not found; plasmashell will respawn on next session start"
+    fi
+  elif command -v plasmashell >/dev/null 2>&1; then
+    nohup plasmashell >/dev/null 2>&1 &
     disown
     info "plasmashell restart issued"
   else
-    warn "kstart not found; plasmashell will respawn on next session start"
+    warn "plasmashell launcher not found; plasmashell will respawn on next session start"
   fi
 fi
 

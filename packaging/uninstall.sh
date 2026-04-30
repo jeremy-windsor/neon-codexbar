@@ -8,7 +8,8 @@
 #   3. systemctl --user daemon-reload.
 #   4. kpackagetool6 -t Plasma/Applet -r org.jeremywindsor.neon-codexbar (ignore not-found).
 #   5. pip uninstall -y neon-codexbar (ignore not-found).
-#   6. With --purge: delete ~/.config/neon-codexbar/ and ~/.cache/neon-codexbar/.
+#   6. Remove the managed ~/.config/environment.d/90-neon-codexbar.conf file.
+#   7. With --purge: delete ~/.config/neon-codexbar/ and ~/.cache/neon-codexbar/.
 #      Without --purge: print where the user data lives and leave it.
 #
 # This script NEVER touches ~/.codexbar/ — that is owned by CodexBar, not us.
@@ -21,6 +22,7 @@ USER_CONFIG_DIR="${HOME}/.config/neon-codexbar"
 USER_CACHE_DIR="${HOME}/.cache/neon-codexbar"
 CODEXBAR_DIR="${HOME}/.codexbar"   # NEVER delete; reference for the safety check.
 PLASMA_APPLETS_RC="${HOME}/.config/plasma-org.kde.plasma.desktop-appletsrc"
+ENVIRONMENT_FILE="${HOME}/.config/environment.d/90-neon-codexbar.conf"
 
 PURGE=0
 FORCE=0
@@ -174,7 +176,17 @@ else
   warn "pip not found; skipping Python package uninstall"
 fi
 
-# --- step 6: user data ---------------------------------------------------------
+# --- step 6: managed environment ----------------------------------------------
+info "Removing managed environment file ${ENVIRONMENT_FILE}"
+rm -f -- "${ENVIRONMENT_FILE}"
+
+# Remove the live-session value if it still exists. Future sessions are handled
+# by deleting the managed environment.d file above.
+if command -v systemctl >/dev/null 2>&1; then
+  systemctl --user unset-environment QML_XHR_ALLOW_FILE_READ >/dev/null 2>&1 || true
+fi
+
+# --- step 7: user data ---------------------------------------------------------
 # Belt-and-suspenders: bail if anyone ever points USER_CONFIG_DIR or
 # USER_CACHE_DIR at ~/.codexbar/ by accident.
 if [[ "${USER_CONFIG_DIR}" == "${CODEXBAR_DIR}" ]] || [[ "${USER_CACHE_DIR}" == "${CODEXBAR_DIR}" ]]; then
@@ -209,15 +221,24 @@ if [[ "${RESTART_PLASMA}" -eq 1 ]]; then
   else
     info "Restarting plasmashell as requested (panels will reload)"
   fi
-  if command -v kquitapp6 >/dev/null 2>&1; then
+  if systemctl --user list-unit-files plasma-plasmashell.service >/dev/null 2>&1; then
+    systemctl --user restart plasma-plasmashell.service \
+      || warn "systemctl --user restart plasma-plasmashell.service failed"
+  elif command -v kquitapp6 >/dev/null 2>&1; then
     kquitapp6 plasmashell >/dev/null 2>&1 || true
-  fi
-  if command -v kstart >/dev/null 2>&1; then
-    kstart plasmashell >/dev/null 2>&1 &
+    if command -v kstart >/dev/null 2>&1; then
+      kstart plasmashell >/dev/null 2>&1 &
+      disown
+      info "plasmashell restart issued"
+    else
+      warn "kstart not found; plasmashell will respawn on next session start"
+    fi
+  elif command -v plasmashell >/dev/null 2>&1; then
+    nohup plasmashell >/dev/null 2>&1 &
     disown
     info "plasmashell restart issued"
   else
-    warn "kstart not found; plasmashell will respawn on next session start"
+    warn "plasmashell launcher not found; plasmashell will respawn on next session start"
   fi
 elif [[ "${PANEL_INSTANCE_FOUND}" -eq 1 ]]; then
   echo
