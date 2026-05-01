@@ -84,6 +84,7 @@ QtObject {
     property string traySecondaryLabel: "7d"
     property string trayLabel: "max"
     property bool trayProviderMissing: false
+    property string trayState: "missing"    // ok | warning | critical | error | stale | missing
     property string worstState: "missing"  // ok | warning | critical | error | stale | missing
 
     function _toFileUrl(absPath) {
@@ -239,6 +240,26 @@ QtObject {
         }
         trayPrimaryUsagePercent = _windowPercent(trayCard, "primary", "5-hour window", 0);
         traySecondaryUsagePercent = _windowPercent(trayCard, "secondary", "7-day window", 1);
+
+        // trayState mirrors worstState precedence, but its usage/error inputs
+        // are scoped to the provider selected for tray display.
+        if (readError && readError.length) {
+            trayState = "missing";
+        } else if (!snapshotOk || !codexbarAvailable || trayProviderMissing) {
+            trayState = "error";
+        } else if (daemonDeadStale) {
+            trayState = "stale";
+        } else if (trayCard && trayCard.error_message) {
+            trayState = "error";
+        } else if (daemonStaleWarning || (trayCard && trayCard.is_stale)) {
+            trayState = "stale";
+        } else if (trayUsagePercent >= criticalThreshold) {
+            trayState = "critical";
+        } else if (trayUsagePercent >= warningThreshold) {
+            trayState = "warning";
+        } else {
+            trayState = "ok";
+        }
 
         // worstState precedence: missing > error > stale > critical > warning > ok
         if (readError && readError.length) {

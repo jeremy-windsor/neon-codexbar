@@ -1,5 +1,5 @@
 // CompactRepresentation.qml
-// Panel icon: a colored ring keyed off store.worstState. Theme colors only.
+// Panel icon: a colored ring keyed off store.trayState. Theme colors only.
 //
 // KDE's stock Plasma 6 applets commonly use MouseArea for compact click
 // activation. KDE Neon QA showed TapHandler did not open the popup here.
@@ -77,7 +77,7 @@ Item {
 
     readonly property color ringColor: {
         if (!store) return Kirigami.Theme.textColor;
-        switch (store.worstState) {
+        switch (store.trayState) {
         case "critical": return Kirigami.Theme.negativeTextColor;
         case "error":    return Kirigami.Theme.negativeTextColor;
         case "warning":  return Kirigami.Theme.neutralTextColor;
@@ -148,7 +148,7 @@ Item {
         anchors.horizontalCenterOffset: root._visualCenterOffset
         text: {
             if (!store) return "";
-            if (store.worstState === "missing" || store.worstState === "error") return "!";
+            if (store.trayState === "missing" || store.trayState === "error") return "!";
             if (!store.cards || store.cards.length === 0) return "-";
             return Math.round(root._singleUsagePercent) + "";
         }
