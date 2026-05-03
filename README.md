@@ -1,10 +1,36 @@
 # neon-codexbar
 
-KDE Plasma widget for CodexBar provider usage.
+KDE Neon / Plasma 6 integration for CodexBar provider usage.
 
 CodexBar owns provider auth, provider fetching, and provider-specific API/CLI
 quirks. neon-codexbar owns the KDE UX: daemon snapshot writing, popup display,
 provider ordering, and tray icon rendering.
+
+## Project Positioning
+
+neon-codexbar exists to make CodexBar easy to use on Linux KDE desktops,
+starting with KDE Neon.
+
+This project is not a replacement for CodexBar and does not reimplement
+provider usage tracking. CodexBar is the provider engine. neon-codexbar is the
+Linux KDE/Plasma integration layer that installs a Plasma widget, runs a user
+daemon, reads normalized CodexBar output, and renders it in the panel.
+
+This is also not PlasmaCodexBar. PlasmaCodexBar is a separate Plasma widget
+inspired by CodexBar for macOS. neon-codexbar is specifically an adapter for
+the CodexBar CLI/provider engine.
+
+Current support target:
+
+- KDE Neon first.
+- KDE Plasma 6 desktops next.
+- Wayland and X11 are both acceptable as long as Plasma 6 and plasmoids work.
+- Other Linux desktops are out of scope for this repo unless a separate UI
+  layer is added later.
+
+Long term, the goal is boring and practical: keep CodexBar provider/auth logic
+in CodexBar, keep Linux desktop presentation here, and avoid duplicating
+provider-specific scraping or API behavior in the widget.
 
 ## Current Status
 
