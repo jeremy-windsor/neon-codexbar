@@ -39,6 +39,8 @@ provider-specific scraping or API behavior in the widget.
 - Settings page supports provider order, provider visibility, selected tray
   provider, and tray icon style.
 - Popup has Refresh and Configure buttons.
+- Runner preserves CodexBar JSON provider errors even when the CLI exits
+  nonzero, so setup/auth failures reach the widget instead of a generic error.
 - Compact tray icon supports:
   - percent in ring
   - percent only
@@ -134,3 +136,31 @@ CodexBarCLI --provider <id> --source <source> --format json
 If CodexBar emits the existing generic usage fields, neon-codexbar should
 mostly render the provider automatically. Provider-specific work here should be
 limited to source policy, friendly display names, fixtures, and tests.
+
+## CodexBar Release Notes
+
+Latest checked upstream release: CodexBar `v0.25.1`, published 2026-05-11.
+
+`v0.25.1` matters on Linux because the standalone CLI archives now include the
+`VERSION` file, so `codexbar --version` reports the release tag instead of
+`CodexBar unknown`.
+
+`v0.25` expanded the provider inventory and added features that are useful for
+neon-codexbar:
+
+- New providers: `manus`, `mimo`, `doubao`, `commandcode`, `stepfun`, `crof`,
+  `venice`, and `openai` API balance support.
+- Provider improvements: MiniMax multi-service quota cards, Antigravity OAuth
+  fetching, Factory/Droid billing windows, OpenRouter/Mistral/Kimi K2 balance
+  text, Gemini CLI auth fixes, Vertex AI credential detection, and DeepSeek
+  balance display fixes.
+- Usage metadata: session pace indicators and quota warning metadata.
+- CLI features worth evaluating here: `codexbar cost --format json`,
+  `codexbar usage --status --format json`, `--json-only`, and the provider
+  balance/pace fields.
+
+The Linux source policy intentionally remains conservative. A provider is only
+added to `src/neon_codexbar/adapter/source_policy.py` after a Linux-safe source
+is validated and a sanitized fixture is captured. Most browser-cookie/web
+providers are still macOS-only in upstream CodexBar, so adding them here without
+validation would just generate prettier errors.

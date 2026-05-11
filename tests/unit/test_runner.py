@@ -7,14 +7,22 @@ from neon_codexbar.adapter.runner import CodexBarRunner
 from neon_codexbar.models import CommandResult
 
 
-def _result(args: Sequence[str], stdout: str, exit_code: int = 0) -> CommandResult:
+def _result(
+    args: Sequence[str],
+    stdout: str,
+    exit_code: int = 0,
+    *,
+    stderr: str = "",
+    error: str | None = None,
+) -> CommandResult:
     return CommandResult(
         command=["codexbar", *args],
         stdout=stdout,
-        stderr="",
+        stderr=stderr,
         exit_code=exit_code,
         timed_out=False,
         duration_seconds=0.01,
+        error=error,
     )
 
 
@@ -126,3 +134,29 @@ def test_fetch_provider_requests_json_without_pretty() -> None:
     assert "--format" in command
     assert command[command.index("--format") + 1] == "json"
     assert "--pretty" not in command
+
+
+def test_fetch_provider_surfaces_json_error_from_stdout() -> None:
+    args = (
+        "--provider",
+        "zai",
+        "--source",
+        "api",
+        "--format",
+        "json",
+    )
+    runner = FakeRunner(
+        {
+            args: _result(
+                args,
+                '[{"provider":"zai","source":"api","error":{"kind":"provider",'
+                '"code":1,"message":"No available fetch strategy for zai."}}]',
+                exit_code=1,
+            )
+        }
+    )
+
+    result = runner.fetch_provider("zai", "api")
+
+    assert result.ok is False
+    assert result.error == "No available fetch strategy for zai."

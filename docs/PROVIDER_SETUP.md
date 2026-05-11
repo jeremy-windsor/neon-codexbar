@@ -59,6 +59,47 @@ Unknown providers are skipped with a diagnostic. To add a provider, extend
 `src/neon_codexbar/adapter/source_policy.py` and capture a fixture from
 `codexbar usage --provider <id> --source <type> --format json`.
 
+CodexBar `v0.25.1` was the latest release checked for this document. The Linux
+standalone CLI in that release fixes `codexbar --version` by packaging its
+`VERSION` file.
+
+## CodexBar v0.25+ provider inventory
+
+CodexBar now exposes these provider ids in `config dump`:
+
+```text
+codex, openai, claude, cursor, opencode, opencodego, alibaba, factory,
+gemini, antigravity, copilot, zai, minimax, manus, kimi, kilo, kiro,
+vertexai, augment, jetbrains, kimik2, amp, ollama, synthetic, warp,
+openrouter, perplexity, mimo, doubao, abacus, mistral, deepseek, codebuff,
+crof, venice, commandcode, stepfun
+```
+
+`v0.25` added or expanded support for Manus, MiMo, Qwen/Doubao, Command Code,
+StepFun, Crof, Venice, OpenAI API balance, MiniMax multi-service quota cards,
+Antigravity OAuth fetching, and provider balance text for OpenRouter/Mistral/Kimi
+K2.
+
+Do not turn those on in neon-codexbar just because they appear in the config
+dump. Many upstream providers use browser cookies or macOS web support. On
+Linux, those often return runtime errors such as "selected source requires web
+support and is only supported on macOS." Add a provider to the source policy
+only after this works on Linux:
+
+```bash
+codexbar usage --provider <id> --source <source> --format json --pretty
+```
+
+Then save a sanitized fixture under `tests/fixtures/codexbar/` and add a
+normalizer/source-policy test.
+
+New CodexBar CLI features worth future neon-codexbar work:
+
+- `codexbar cost --format json` for local Codex/Claude token-cost history.
+- `codexbar usage --status --format json` for provider service-status payloads.
+- `--json-only` for cleaner stdout when CodexBar logs get noisy.
+- Usage pace and quota warning metadata for better tray warnings.
+
 ## Provider-specific notes
 
 ### codex

@@ -21,6 +21,36 @@ class CodexBarUnavailableError(RuntimeError):
     """Raised when the CodexBar CLI cannot be located."""
 
 
+def _provider_error_message(raw_json: str) -> str | None:
+    """Extract provider error messages from CodexBar JSON output."""
+
+    if not raw_json.strip():
+        return None
+    try:
+        parsed = json.loads(raw_json)
+    except json.JSONDecodeError:
+        return None
+
+    payloads: list[object]
+    if isinstance(parsed, list):
+        payloads = parsed
+    else:
+        payloads = [parsed]
+
+    messages: list[str] = []
+    for payload in payloads:
+        if not isinstance(payload, dict):
+            continue
+        error = payload.get("error")
+        if not isinstance(error, dict):
+            continue
+        message = error.get("message")
+        if isinstance(message, str) and message.strip() and message not in messages:
+            messages.append(message.strip())
+
+    return "; ".join(messages) if messages else None
+
+
 def _is_executable(path: Path) -> bool:
     return path.is_file() and path.stat().st_mode & 0o111 != 0
 
@@ -194,7 +224,7 @@ class CodexBarRunner:
                 duration_seconds=0.0,
                 error="neon-codexbar refuses to use --source auto on Linux.",
             )
-        return self.run(
+        result = self.run(
             [
                 "--provider",
                 provider_id,
@@ -204,3 +234,10 @@ class CodexBarRunner:
                 "json",
             ]
         )
+        if result.ok or result.error:
+            return result
+
+        message = _provider_error_message(result.stdout)
+        if message:
+            return replace(result, error=message)
+        return result
