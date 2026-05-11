@@ -52,7 +52,7 @@ provider-specific scraping or API behavior in the widget.
 
 ```text
 neon-codexbar-daemon
-  -> CodexBarCLI --provider <id> --source <source> --format json
+  -> codexbar --provider <id> --source <source> --format json
   -> normalize provider cards
   -> write ~/.cache/neon-codexbar/snapshot.json
   -> Plasma widget reads snapshot.json
@@ -65,6 +65,60 @@ Runtime files live in standard XDG locations:
 - optional auth env drop-in: `~/.config/neon-codexbar/auth.env`
 
 `~/.codexbar/` belongs to CodexBar and is not managed by neon-codexbar.
+
+## What Works Out of the Box
+
+neon-codexbar is the KDE Neon / Plasma integration layer. It does not replace
+CodexBar and it does not authenticate providers itself.
+
+The widget should install and run on KDE Neon when these pieces are present:
+
+- KDE Plasma 6 with `kpackagetool6`
+- Python 3.11 or later with `pip`
+- a working systemd user session
+- CodexBar installed as `codexbar` on `PATH`, or in a common user location like
+  `~/.local/bin/codexbar`
+
+After installation, the daemon discovers providers by running CodexBar commands.
+Useful quota data appears only for providers that are already configured and
+authenticated where CodexBar expects them.
+
+That means a fresh Neon user may get a working widget shell before they get
+working provider cards. That is expected: install UX belongs here; provider
+auth belongs to CodexBar and the provider CLIs/APIs.
+
+## Provider Authentication
+
+Provider authentication is CodexBar-owned. neon-codexbar only reads normalized
+CodexBar output and renders it in Plasma.
+
+Supported providers currently use these Linux sources:
+
+- `codex`: CodexBar calls the Codex CLI; auth comes from the user's existing
+  Codex CLI login, usually under `~/.codex/`.
+- `claude`: CodexBar calls the Claude CLI; auth comes from the user's existing
+  Claude CLI login, usually under `~/.claude/`.
+- `zai`: CodexBar uses the z.ai API; the daemon needs `Z_AI_API_KEY` in its
+  systemd user environment.
+- `openrouter`: CodexBar uses the OpenRouter API; the daemon needs
+  `OPENROUTER_API_KEY` in its systemd user environment.
+
+Do not put provider API keys in `~/.config/neon-codexbar/config.json`.
+neon-codexbar rejects secret-looking config keys by design. Put provider config
+in `~/.codexbar/config.json`, provider CLI auth files, or a user-owned systemd
+environment/drop-in as described in `docs/PROVIDER_SETUP.md`.
+
+For a quick check:
+
+```bash
+codexbar config dump --format json
+neon-codexbar discover --json
+neon-codexbar fetch --json
+```
+
+If `codexbar config dump` fails, fix CodexBar first. If `discover` works but a
+provider card is missing or errored, check that provider's CodexBar config and
+auth environment.
 
 ## Install
 
