@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from neon_codexbar.adapter.discovery import discover
-from neon_codexbar.adapter.runner import CodexBarRunner
+from neon_codexbar.adapter.runner import DEFAULT_TIMEOUT_SECONDS, CodexBarRunner
 from neon_codexbar.models import CommandResult
 
 
@@ -160,3 +160,7 @@ def test_fetch_provider_surfaces_json_error_from_stdout() -> None:
 
     assert result.ok is False
     assert result.error == "No available fetch strategy for zai."
+
+
+def test_default_timeout_has_headroom_for_slow_claude_cli_fetches() -> None:
+    assert DEFAULT_TIMEOUT_SECONDS >= 60.0

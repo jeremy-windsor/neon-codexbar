@@ -14,7 +14,10 @@ from neon_codexbar.config import AppConfig
 from neon_codexbar.diagnostics import redact_string
 from neon_codexbar.models import CommandResult
 
-DEFAULT_TIMEOUT_SECONDS = 30.0
+# Claude CLI provider fetches are usually ~17-20s on this machine, but can
+# drift past 30s when Claude's plugin/session startup is cold. Keep enough
+# headroom that a slow valid fetch does not become a false provider outage.
+DEFAULT_TIMEOUT_SECONDS = 60.0
 
 
 class CodexBarUnavailableError(RuntimeError):
