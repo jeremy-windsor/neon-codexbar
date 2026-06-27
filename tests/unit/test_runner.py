@@ -162,5 +162,5 @@ def test_fetch_provider_surfaces_json_error_from_stdout() -> None:
     assert result.error == "No available fetch strategy for zai."
 
 
-def test_default_timeout_has_headroom_for_slow_claude_cli_fetches() -> None:
+def test_default_timeout_has_headroom_for_slow_provider_cli_fetches() -> None:
     assert DEFAULT_TIMEOUT_SECONDS >= 60.0

@@ -114,10 +114,10 @@ early refresh via `SIGUSR1`.
 Measured on this machine:
 
 - Codex CLI source: about 2 seconds
-- Claude CLI source: about 16 seconds
+- Claude OAuth source: about 2 seconds
 - z.ai API source: under 1 second
-- full daemon tick: about 17 seconds because providers fetch in parallel and
-  Claude is the slowest source
+- full daemon tick: usually under 3 seconds when all enabled providers use
+  Codex/OAuth/API sources
 
 The current default refresh cadence is conservative. Shorter intervals should
 be tested carefully because some provider sources are CLI-driven and may be

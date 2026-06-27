@@ -51,7 +51,7 @@ The adapter pins the source per provider:
 | Provider | Source | Notes |
 |---|---|---|
 | `codex` | `cli` | uses `~/.codex` auth |
-| `claude` | `cli` | uses `~/.claude` auth; **slow (~15s/call)** |
+| `claude` | `oauth` | uses Claude Code OAuth auth; avoids Claude CLI probe sessions |
 | `zai` | `api` | requires `Z_AI_API_KEY` env var |
 | `openrouter` | `api` | requires `OPENROUTER_API_KEY` env var |
 
@@ -115,17 +115,16 @@ between time and AM/PM — render as a regular space.
 ### claude
 
 ```bash
-codexbar usage --provider claude --source cli --format json --pretty
+codexbar usage --provider claude --source oauth --format json --pretty
 ```
 
-Auth is whatever `claude` CLI is logged in as (`~/.claude/`). Returns 2 quota
-windows (5h / 1wk).
+Auth is Claude Code OAuth state. Returns the standard quota windows plus any
+Claude-specific extra windows CodexBar exposes.
 
-- Slow: a single fetch hits claude.ai and takes ~15 seconds.
-- The `primary` window is sometimes returned with only `usedPercent` and
-  `windowMinutes` — no `resetsAt`, no `resetDescription`. Display layer must
-  tolerate.
-- Identity is bare (only `providerID`). No email surfaced.
+- Fast on Linux: live validation on Jeremy's laptop returned in about 2 seconds.
+- Avoids the old CLI probe path that created empty Claude Code recents.
+- The old `cli` source still works, but it launches the Claude CLI probe and is
+  intentionally not used by neon-codexbar.
 
 ### zai
 

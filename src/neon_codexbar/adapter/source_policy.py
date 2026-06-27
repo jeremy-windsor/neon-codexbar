@@ -11,7 +11,7 @@ from dataclasses import dataclass
 
 LINUX_SOURCE_POLICY: dict[str, str] = {
     "codex": "cli",
-    "claude": "cli",
+    "claude": "oauth",
     "zai": "api",
     "openrouter": "api",
 }

@@ -43,6 +43,26 @@ def test_normalizer_handles_claude_primary_secondary_windows() -> None:
     assert card.quota_windows[1].window_label == "7-day window"
 
 
+def test_normalizer_handles_claude_oauth_nested_usage_windows() -> None:
+    card = _normalize("claude_oauth_success.json")
+
+    assert card.provider_id == "claude"
+    assert card.display_name == "Claude Code"
+    assert card.source == "oauth"
+    assert [window.id for window in card.quota_windows] == [
+        "primary",
+        "secondary",
+        "claude-routines",
+    ]
+    assert [window.window_label for window in card.quota_windows] == [
+        "5-hour window",
+        "7-day window",
+        "Daily Routines",
+    ]
+    assert card.login_method == "Claude Pro"
+    assert card.error_message is None
+
+
 def test_normalizer_handles_zai_reliable_quota_windows() -> None:
     card = _normalize("zai_api_success.json")
 

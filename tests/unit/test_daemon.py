@@ -96,7 +96,7 @@ def _fake_runner_all_four() -> FakeRunner:
         ),
         provider_payloads={
             "codex": (FIXTURES / "codex_cli_success.json").read_text(encoding="utf-8"),
-            "claude": (FIXTURES / "claude_cli_success.json").read_text(encoding="utf-8"),
+            "claude": (FIXTURES / "claude_oauth_success.json").read_text(encoding="utf-8"),
             "zai": (FIXTURES / "zai_api_success.json").read_text(encoding="utf-8"),
             "openrouter": (FIXTURES / "openrouter_api_success.json").read_text(encoding="utf-8"),
         },
@@ -118,7 +118,7 @@ def test_daemon_tick_fetches_all_enabled_and_normalizes(snapshot_path: Path) -> 
     assert tick.error_count == 0
     assert {(pid, src) for pid, src in runner.fetch_calls} == {
         ("codex", "cli"),
-        ("claude", "cli"),
+        ("claude", "oauth"),
         ("zai", "api"),
         ("openrouter", "api"),
     }

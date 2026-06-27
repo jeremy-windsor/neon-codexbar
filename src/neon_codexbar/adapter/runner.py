@@ -14,9 +14,9 @@ from neon_codexbar.config import AppConfig
 from neon_codexbar.diagnostics import redact_string
 from neon_codexbar.models import CommandResult
 
-# Claude CLI provider fetches are usually ~17-20s on this machine, but can
-# drift past 30s when Claude's plugin/session startup is cold. Keep enough
-# headroom that a slow valid fetch does not become a false provider outage.
+# Some provider sources still shell out to heavyweight CLIs and can drift past
+# 30s when their plugin/session startup is cold. Keep enough headroom that a
+# slow valid fetch does not become a false provider outage.
 DEFAULT_TIMEOUT_SECONDS = 60.0
 
 

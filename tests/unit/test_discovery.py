@@ -29,7 +29,7 @@ def test_discovery_parses_config_fixture() -> None:
 
     assert by_id["codex"].enabled is True
     assert by_id["codex"].source == "cli"
-    assert by_id["claude"].source == "cli"
+    assert by_id["claude"].source == "oauth"
     assert by_id["zai"].source == "api"
     assert by_id["openrouter"].source == "api"
     assert by_id["unknown-provider"].skipped is True
