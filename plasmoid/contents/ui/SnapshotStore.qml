@@ -83,6 +83,7 @@ QtObject {
     property string trayPrimaryLabel: "5h"
     property string traySecondaryLabel: "7d"
     property string trayLabel: "max"
+    property var trayCard: null
     property bool trayProviderMissing: false
     property string trayState: "missing"    // ok | warning | critical | error | stale | missing
     property string worstState: "missing"  // ok | warning | critical | error | stale | missing
@@ -223,7 +224,7 @@ QtObject {
         trayUsagePercent = maxPct;
         trayLabel = maxCard ? (maxCard.display_name || maxCard.provider_id || "max") : "max";
         trayProviderMissing = false;
-        var trayCard = maxCard;
+        var selectedTrayCard = maxCard;
         if (trayMode === "selected-provider" && trayProvider && trayProvider.trim().length) {
             var selectedId = trayProvider.trim().toLowerCase();
             trayProviderMissing = true;
@@ -232,14 +233,15 @@ QtObject {
                 if (card && card.provider_id && card.provider_id.toLowerCase() === selectedId) {
                     trayUsagePercent = _providerMaxPercent(card);
                     trayLabel = card.display_name || card.provider_id;
-                    trayCard = card;
+                    selectedTrayCard = card;
                     trayProviderMissing = false;
                     break;
                 }
             }
         }
-        trayPrimaryUsagePercent = _windowPercent(trayCard, "primary", "5-hour window", 0);
-        traySecondaryUsagePercent = _windowPercent(trayCard, "secondary", "7-day window", 1);
+        trayCard = selectedTrayCard;
+        trayPrimaryUsagePercent = _windowPercent(selectedTrayCard, "primary", "5-hour window", 0);
+        traySecondaryUsagePercent = _windowPercent(selectedTrayCard, "secondary", "7-day window", 1);
 
         // trayState mirrors worstState precedence, but its usage/error inputs
         // are scoped to the provider selected for tray display.
@@ -249,9 +251,9 @@ QtObject {
             trayState = "error";
         } else if (daemonDeadStale) {
             trayState = "stale";
-        } else if (trayCard && trayCard.error_message) {
+        } else if (selectedTrayCard && selectedTrayCard.error_message) {
             trayState = "error";
-        } else if (daemonStaleWarning || (trayCard && trayCard.is_stale)) {
+        } else if (daemonStaleWarning || (selectedTrayCard && selectedTrayCard.is_stale)) {
             trayState = "stale";
         } else if (trayUsagePercent >= criticalThreshold) {
             trayState = "critical";

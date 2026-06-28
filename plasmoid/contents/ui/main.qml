@@ -39,10 +39,6 @@ PlasmoidItem {
         plasmoidItem: root
     }
 
-    // toolTipMainText/toolTipSubText still parse on Plasma 6 but emit
-    // deprecation warnings; toolTipItem is the long-term API. For v1 we keep
-    // the simple string form — migrate to toolTipItem when we add an icon
-    // alongside the text.
     toolTipMainText: "neon-codexbar"
     toolTipSubText: {
         if (store.readError && store.readError.length) return store.readError;
@@ -52,5 +48,10 @@ PlasmoidItem {
             return store.cards.length + " providers • "
                 + store.trayLabel + " " + Math.round(store.trayUsagePercent) + "%";
         return "No providers";
+    }
+    toolTipItem: UsageTooltip {
+        store: root.snapshotStore
+        warningThreshold: Plasmoid.configuration.warningThreshold
+        criticalThreshold: Plasmoid.configuration.criticalThreshold
     }
 }
