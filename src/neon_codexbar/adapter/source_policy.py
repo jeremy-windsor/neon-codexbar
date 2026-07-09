@@ -14,6 +14,7 @@ LINUX_SOURCE_POLICY: dict[str, str] = {
     "claude": "oauth",
     "zai": "api",
     "openrouter": "api",
+    "grok": "web",
 }
 
 
