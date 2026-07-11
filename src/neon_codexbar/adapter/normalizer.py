@@ -312,19 +312,12 @@ def _model_usage(payload: JsonDict, usage: JsonDict) -> list[JsonDict]:
     return []
 
 
-def _last_success(payload: JsonDict, usage: JsonDict) -> datetime | None:
+def _last_success(payload: JsonDict, attempted_at: datetime) -> datetime | None:
+    """Return when this successful fetch happened, not provider cache age."""
+
     if payload.get("error") is not None:
         return None
-    for value in (
-        usage.get("updatedAt"),
-        _as_dict(payload.get("credits")).get("updatedAt"),
-        _as_dict(usage.get("openRouterUsage")).get("updatedAt"),
-        _as_dict(payload.get("openaiDashboard")).get("updatedAt"),
-    ):
-        parsed = parse_datetime(value)
-        if parsed is not None:
-            return parsed
-    return None
+    return attempted_at
 
 
 def normalize_payload(
@@ -367,7 +360,7 @@ def normalize_payload(
             f"Check CodexBar configuration/auth for {provider_id}." if error_message else None
         ),
         is_stale=False,
-        last_success=_last_success(payload, usage),
+        last_success=_last_success(payload, attempt_time),
         last_attempt=attempt_time,
         raw=payload if include_raw else None,
     )

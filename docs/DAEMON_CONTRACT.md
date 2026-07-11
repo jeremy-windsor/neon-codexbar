@@ -12,7 +12,7 @@ disagrees with the code, the code is wrong; please open an issue.
 | Override env | `NEON_CODEXBAR_SNAPSHOT_PATH` (absolute or `~`-relative) |
 | Override CLI | `neon-codexbar-daemon --snapshot-path /path/to/snapshot.json` |
 | Mode | `0600` (user-only) |
-| Ownership | The daemon writes; the widget reads. The widget MUST NOT write or unlink. |
+| Ownership | The daemon writes; the widget reads. The refresh helper writes only the request sentinel. |
 
 ## Atomic write semantics
 
@@ -145,11 +145,12 @@ back in.
 
 ## Manual refresh triggers
 
-Two equivalent ways for the widget (or any external script) to ask the
+Three equivalent ways for the widget (or any external script) to ask the
 daemon to refresh sooner than `refresh_interval`:
 
 | Method | How |
 |---|---|
+| Helper | `neon-codexbar refresh` (used by the widget) |
 | Sentinel file | `touch ~/.cache/neon-codexbar/refresh.touch` (relative to the snapshot directory). Daemon consumes (deletes) it, then runs a tick. |
 | Signal | `kill -USR1 $(pgrep -u $UID -x neon-codexbar-d)` |
 
@@ -159,7 +160,7 @@ Both interrupt the inter-tick sleep within ~1 second.
 
 | | Daemon | Widget |
 |---|---|---|
-| Spawning subprocesses | yes | **no, ever** |
+| Spawning provider subprocesses | yes | no; refresh invokes only the fixed neon-codexbar helper |
 | Reading `~/.codexbar/config.json` | yes (via `codexbar config dump`) | no |
 | Writing the snapshot | yes | no |
 | Reading the snapshot | no | yes |

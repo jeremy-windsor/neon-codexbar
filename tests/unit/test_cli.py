@@ -55,3 +55,51 @@ def test_cli_fetch_json_against_fixture() -> None:
     assert payload["cards"][0]["provider_id"] == "openrouter"
     assert payload["cards"][0]["quota_windows"] == []
     assert payload["cards"][0]["credit_meters"][0]["balance"] == 3.48599225
+
+
+def test_cli_fetch_error_fixture_returns_nonzero() -> None:
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "neon_codexbar",
+            "fetch",
+            "--json",
+            "--fixture",
+            str(FIXTURES / "representative_error.json"),
+        ],
+        cwd=ROOT,
+        env=_env(),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 1
+    assert json.loads(result.stdout)["ok"] is False
+
+
+def test_cli_refresh_creates_private_sentinel(tmp_path: Path) -> None:
+    snapshot = tmp_path / "cache" / "snapshot.json"
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "neon_codexbar",
+            "refresh",
+            "--json",
+            "--snapshot-path",
+            str(snapshot),
+        ],
+        cwd=ROOT,
+        env=_env(),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    sentinel = snapshot.parent / "refresh.touch"
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["ok"] is True
+    assert sentinel.exists()
+    assert sentinel.stat().st_mode & 0o777 == 0o600

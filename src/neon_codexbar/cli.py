@@ -18,6 +18,7 @@ from neon_codexbar.adapter.runner import CodexBarRunner
 from neon_codexbar.adapter.source_policy import LINUX_SOURCE_POLICY
 from neon_codexbar.config import load_config
 from neon_codexbar.diagnostics import redact_secrets
+from neon_codexbar.ipc.snapshot_writer import default_snapshot_path
 from neon_codexbar.models import (
     ProviderCard,
     ProviderConfigEntry,
@@ -74,7 +75,7 @@ def cmd_discover(args: argparse.Namespace) -> int:
         "command": _command_result_payload(result.command_result),
     }
     _dump_json(payload)
-    return 0
+    return 0 if result.ok else 1
 
 
 def _error_card(
@@ -119,10 +120,11 @@ def cmd_fetch(args: argparse.Namespace) -> int:
     if args.fixture:
         raw = Path(args.fixture).expanduser().read_text(encoding="utf-8")
         cards = normalize_json(raw, attempted_at=attempted_at)
+        ok = bool(cards) and all(card.error_message is None for card in cards)
         _dump_json(
-            {"ok": True, "cards": [_card_to_dict(card) for card in cards], "diagnostics": []}
+            {"ok": ok, "cards": [_card_to_dict(card) for card in cards], "diagnostics": []}
         )
-        return 0
+        return 0 if ok else 1
 
     discovery = discover(runner)
     cards: list[ProviderCard] = []
@@ -171,13 +173,14 @@ def cmd_fetch(args: argparse.Namespace) -> int:
             )
             diagnostics.append(f"{entry.provider_id}: invalid CodexBar JSON: {exc}")
 
+    ok = bool(cards) and all(card.error_message is None for card in cards)
     payload = {
-        "ok": all(card.error_message is None for card in cards),
+        "ok": ok,
         "cards": [_card_to_dict(card) for card in cards],
         "diagnostics": diagnostics,
     }
     _dump_json(payload)
-    return 0 if cards else 1
+    return 0 if ok else 1
 
 
 def cmd_diagnose(args: argparse.Namespace) -> int:
@@ -204,6 +207,32 @@ def cmd_diagnose(args: argparse.Namespace) -> int:
         "discovery_command": _command_result_payload(discovery.command_result),
     }
     _dump_json(payload)
+    return 0 if payload["ok"] else 1
+
+
+def cmd_refresh(args: argparse.Namespace) -> int:
+    """Ask the daemon for an early tick by creating its sentinel file."""
+
+    snapshot_path = (
+        Path(args.snapshot_path).expanduser() if args.snapshot_path else default_snapshot_path()
+    )
+    sentinel = snapshot_path.parent / "refresh.touch"
+    try:
+        sentinel.parent.mkdir(parents=True, exist_ok=True)
+        sentinel.touch(mode=0o600, exist_ok=True)
+        sentinel.chmod(0o600)
+    except OSError as exc:
+        message = f"Could not request daemon refresh: {exc}"
+        if args.json:
+            _dump_json({"ok": False, "error": message})
+        else:
+            print(message, file=sys.stderr)
+        return 1
+
+    if args.json:
+        _dump_json({"ok": True, "refresh_sentinel": str(sentinel)})
+    else:
+        print(f"Refresh requested: {sentinel}")
     return 0
 
 
@@ -241,6 +270,11 @@ def build_parser() -> argparse.ArgumentParser:
     diagnose_parser = subparsers.add_parser("diagnose", help="emit redacted diagnostic bundle")
     diagnose_parser.add_argument("--json", action="store_true", required=True, help="emit JSON")
     diagnose_parser.set_defaults(func=cmd_diagnose)
+
+    refresh_parser = subparsers.add_parser("refresh", help="request an early daemon refresh")
+    refresh_parser.add_argument("--json", action="store_true", help="emit JSON")
+    refresh_parser.add_argument("--snapshot-path", help="snapshot path whose daemon to refresh")
+    refresh_parser.set_defaults(func=cmd_refresh)
 
     return parser
 

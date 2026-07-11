@@ -10,7 +10,7 @@
     "Category": "System Information",
     "Website": "https://github.com/jeremy-windsor/neon-codexbar",
     "BugReportUrl": "https://github.com/jeremy-windsor/neon-codexbar/issues",
-    "Version": "0.1.0",
+    "Version": "0.1.1",
     "License": "MIT"
   },
   "X-Plasma-API-Minimum-Version": "6.0",

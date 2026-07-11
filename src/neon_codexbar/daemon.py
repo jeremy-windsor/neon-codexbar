@@ -427,7 +427,7 @@ def main(argv: list[str] | None = None) -> int:
             tick.error_count,
             tick.elapsed_seconds,
         )
-        return 0
+        return 0 if tick.fetch_count > 0 and tick.error_count == 0 else 1
 
     _install_signal_handlers(daemon)
     return daemon.run_forever()

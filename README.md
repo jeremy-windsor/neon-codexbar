@@ -44,9 +44,9 @@ provider-specific scraping or API behavior in the widget.
 - Compact tray icon supports:
   - percent in ring
   - percent only
-  - 5h / 7d bars
-  - 5h / 7d circles
-  - 5h / 7d tiles
+  - provider window bars
+  - provider window circles
+  - provider window tiles
 
 ## Runtime Flow
 
@@ -62,7 +62,8 @@ Runtime files live in standard XDG locations:
 
 - snapshot: `~/.cache/neon-codexbar/snapshot.json`
 - systemd user unit: `~/.config/systemd/user/neon-codexbar.service`
-- optional auth env drop-in: `~/.config/neon-codexbar/auth.env`
+- optional auth file referenced by a user-service drop-in:
+  `~/.config/neon-codexbar/auth.env`
 
 `~/.codexbar/` belongs to CodexBar and is not managed by neon-codexbar.
 
@@ -89,6 +90,8 @@ systemctl --user restart plasma-plasmashell.service
 ## Verify
 
 ```bash
+python3 -m venv .venv
+.venv/bin/python -m pip install -e '.[dev]'
 .venv/bin/python -m pytest
 .venv/bin/python -m ruff check .
 systemctl --user status neon-codexbar.service
@@ -108,8 +111,9 @@ PY
 
 ## Refresh Behavior
 
-The daemon refreshes providers on its configured interval and also supports an
-early refresh via `SIGUSR1`.
+The daemon refreshes providers on its configured interval. The popup and
+settings page call `neon-codexbar refresh`, which creates the daemon's refresh
+sentinel. `SIGUSR1` remains available for scripts.
 
 Measured on this machine:
 
@@ -139,9 +143,9 @@ limited to source policy, friendly display names, fixtures, and tests.
 
 ## CodexBar Release Notes
 
-Latest checked upstream release: CodexBar `v0.25.1`, published 2026-05-11.
+Latest locally validated upstream release: CodexBar `v0.42.0`.
 
-`v0.25.1` matters on Linux because the standalone CLI archives now include the
+`v0.25.1` first mattered on Linux because the standalone CLI archives included the
 `VERSION` file, so `codexbar --version` reports the release tag instead of
 `CodexBar unknown`.
 

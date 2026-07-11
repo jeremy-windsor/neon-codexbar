@@ -54,14 +54,14 @@ The adapter pins the source per provider:
 | `claude` | `oauth` | uses Claude Code OAuth auth; avoids Claude CLI probe sessions |
 | `zai` | `api` | requires `Z_AI_API_KEY` env var |
 | `openrouter` | `api` | requires `OPENROUTER_API_KEY` env var |
+| `grok` | `web` | uses the signed-in Grok browser/session credentials supported by CodexBar |
 
 Unknown providers are skipped with a diagnostic. To add a provider, extend
 `src/neon_codexbar/adapter/source_policy.py` and capture a fixture from
 `codexbar usage --provider <id> --source <type> --format json`.
 
-CodexBar `v0.25.1` was the latest release checked for this document. The Linux
-standalone CLI in that release fixes `codexbar --version` by packaging its
-`VERSION` file.
+CodexBar `v0.42.0` is the latest locally validated release for this document.
+The Linux standalone CLI has reported its packaged version since `v0.25.1`.
 
 ## CodexBar v0.25+ provider inventory
 

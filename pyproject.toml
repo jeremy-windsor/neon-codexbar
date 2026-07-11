@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "neon-codexbar"
-version = "0.1.0"
+version = "0.1.1"
 description = "KDE/Plasma frontend adapter for CodexBar provider usage data"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -20,6 +20,12 @@ classifiers = [
   "Programming Language :: Python :: 3.11",
 ]
 dependencies = []
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8,<9",
+  "ruff>=0.12,<1",
+]
 
 [project.scripts]
 neon-codexbar = "neon_codexbar.cli:main"

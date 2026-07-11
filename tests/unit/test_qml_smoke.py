@@ -10,7 +10,11 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def test_usage_tooltip_qml_loads_with_sample_data() -> None:
+@pytest.mark.parametrize(
+    "fixture_name",
+    ["usage_tooltip_smoke.qml", "snapshot_store_smoke.qml"],
+)
+def test_qml_smoke_fixtures_load(fixture_name: str) -> None:
     qml = shutil.which("qml6")
     if qml is None:
         pytest.skip("qml6 is not available")
@@ -25,7 +29,7 @@ def test_usage_tooltip_qml_loads_with_sample_data() -> None:
             "-I",
             str(ROOT / "plasmoid" / "contents" / "ui"),
             "-f",
-            str(ROOT / "tests" / "qml" / "usage_tooltip_smoke.qml"),
+            str(ROOT / "tests" / "qml" / fixture_name),
         ],
         cwd=ROOT,
         env=env,

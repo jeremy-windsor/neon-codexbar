@@ -243,10 +243,12 @@ install -m 0644 "${UNIT_SRC}" "${UNIT_DEST}" \
 systemctl --user daemon-reload \
   || die "systemctl --user daemon-reload failed"
 
-# enable --now is idempotent: enabling an already-enabled unit is a no-op,
-# starting an already-running unit is a no-op.
-systemctl --user enable --now neon-codexbar.service \
-  || die "systemctl --user enable --now neon-codexbar.service failed. Run 'systemctl --user status neon-codexbar.service' and 'journalctl --user -u neon-codexbar.service' for details."
+# Enable first, then restart so upgrades replace the daemon's in-memory code.
+systemctl --user enable neon-codexbar.service \
+  || die "systemctl --user enable neon-codexbar.service failed"
+
+systemctl --user restart neon-codexbar.service \
+  || die "systemctl --user restart neon-codexbar.service failed. Run 'systemctl --user status neon-codexbar.service' and 'journalctl --user -u neon-codexbar.service' for details."
 
 info "Daemon enabled and started"
 
