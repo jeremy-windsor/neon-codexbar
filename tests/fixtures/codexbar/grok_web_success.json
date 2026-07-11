@@ -1,0 +1,25 @@
+[
+  {
+    "provider": "grok",
+    "source": "grok-web",
+    "version": "0.2.93",
+    "usage": {
+      "accountEmail": "user@example.com",
+      "accountOrganization": "org-redacted",
+      "loginMethod": "SuperGrok",
+      "identity": {
+        "accountEmail": "user@example.com",
+        "accountOrganization": "org-redacted",
+        "loginMethod": "SuperGrok",
+        "providerID": "grok"
+      },
+      "primary": {
+        "resetsAt": "2026-07-16T02:04:21Z",
+        "usedPercent": 66
+      },
+      "secondary": null,
+      "tertiary": null,
+      "updatedAt": "2026-07-11T14:36:13Z"
+    }
+  }
+]

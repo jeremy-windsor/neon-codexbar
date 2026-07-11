@@ -117,6 +117,35 @@ def _normalize_window(
     )
 
 
+def _duration_label_from_seconds(seconds: float | None) -> str | None:
+    if seconds is None or seconds <= 3600:
+        return None
+    days = int((seconds / 86400) + 0.5)
+    if 4 <= days <= 12:
+        return "Weekly"
+    if 20 <= days <= 45:
+        return "Monthly"
+    return None
+
+
+def _grok_window_label(
+    window_id: str,
+    raw_window: JsonDict,
+    attempted_at: datetime,
+) -> str | None:
+    if window_id != "primary":
+        return None
+
+    window_minutes = _as_int(raw_window.get("windowMinutes"))
+    if window_minutes is not None:
+        return _duration_label_from_seconds(window_minutes * 60)
+
+    resets_at = parse_datetime(raw_window.get("resetsAt"))
+    if resets_at is None:
+        return None
+    return _duration_label_from_seconds((resets_at - attempted_at).total_seconds())
+
+
 def _is_unreliable_quota_window(provider_id: str, raw_window: JsonDict) -> bool:
     """Drop known provider metadata that does not represent a useful quota."""
 
@@ -130,20 +159,25 @@ def _is_unreliable_quota_window(provider_id: str, raw_window: JsonDict) -> bool:
     )
 
 
-def _quota_windows(provider_id: str, usage: JsonDict) -> list[QuotaWindow]:
+def _quota_windows(
+    provider_id: str,
+    usage: JsonDict,
+    attempted_at: datetime,
+) -> list[QuotaWindow]:
     windows: list[QuotaWindow] = []
     for key in _WINDOW_KEYS:
         raw_window = _as_dict(usage.get(key))
         if not raw_window or _is_unreliable_quota_window(provider_id, raw_window):
             continue
+        window_label = (
+            raw_window.get("title") if isinstance(raw_window.get("title"), str) else None
+        )
+        if provider_id == "grok" and window_label is None:
+            window_label = _grok_window_label(key, raw_window, attempted_at)
         windows.append(
             _normalize_window(
                 window_id=key,
-                window_label=(
-                    raw_window.get("title")
-                    if isinstance(raw_window.get("title"), str)
-                    else None
-                ),
+                window_label=window_label,
                 raw_window=raw_window,
             )
         )
@@ -325,7 +359,7 @@ def normalize_payload(
         identity=identity,
         plan=plan,
         login_method=login_method,
-        quota_windows=_quota_windows(provider_id, usage),
+        quota_windows=_quota_windows(provider_id, usage, attempt_time),
         credit_meters=_credit_meters(payload, usage),
         model_usage=_model_usage(payload, usage),
         error_message=error_message,

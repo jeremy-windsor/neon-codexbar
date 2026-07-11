@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from pathlib import Path
 
 from neon_codexbar.adapter.normalizer import normalize_json
@@ -91,6 +92,22 @@ def test_normalizer_handles_openrouter_credit_balance_without_fake_windows() -> 
     key_meter = card.credit_meters[1]
     assert key_meter.label == "OpenRouter Key Quota"
     assert key_meter.used == 1.09768035
+
+
+def test_normalizer_labels_grok_primary_window_like_codexbar() -> None:
+    card = normalize_json(
+        (FIXTURES / "grok_web_success.json").read_text(encoding="utf-8"),
+        attempted_at=datetime(2026, 7, 11, 14, 36, 13, tzinfo=UTC),
+    )[0]
+
+    assert card.provider_id == "grok"
+    assert card.display_name == "Grok"
+    assert card.source == "grok-web"
+    assert card.plan == "SuperGrok"
+    assert [window.id for window in card.quota_windows] == ["primary"]
+    assert card.quota_windows[0].used_percent == 66.0
+    assert card.quota_windows[0].window_label == "Weekly"
+    assert card.error_message is None
 
 
 def test_normalizer_drops_zai_unreliable_one_minute_window() -> None:
