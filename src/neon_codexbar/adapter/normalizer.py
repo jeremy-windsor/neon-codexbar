@@ -30,6 +30,50 @@ _ZAI_UNRELIABLE_WINDOW_LABELS = {"1 minute window"}
 _NON_PLAN_LOGIN_PREFIXES = ("balance:",)
 
 
+def _error_presentation(
+    provider_id: str,
+    error_message: str | None,
+) -> tuple[str | None, str | None, str | None]:
+    """Return a short title, recovery hint, and severity for a provider error."""
+
+    if error_message is None:
+        return None, None, None
+    if provider_id != "codex":
+        return (
+            error_message,
+            f"Check CodexBar configuration/auth for {provider_id}.",
+            "error",
+        )
+
+    lowered = error_message.lower()
+    if "timed out" in lowered or "timeout" in lowered:
+        return (
+            "Codex usage check timed out",
+            (
+                "Click Refresh to try again. If it keeps failing, run "
+                "codex login in a terminal, then refresh."
+            ),
+            "warning",
+        )
+    if any(
+        marker in lowered
+        for marker in ("auth", "credential", "login", "sign in", "token", "unauthorized", "401")
+    ):
+        return (
+            "Codex sign-in required",
+            "Run codex login in a terminal, then click Refresh.",
+            "error",
+        )
+    return (
+        "Codex usage is unavailable",
+        (
+            "Run codex login in a terminal, then click Refresh. "
+            "Open Show debug if it still fails."
+        ),
+        "error",
+    )
+
+
 def _as_dict(value: Any) -> JsonDict:
     return value if isinstance(value, dict) else {}
 
@@ -335,6 +379,10 @@ def normalize_payload(
     identity = _identity_from_payload(payload, usage)
     error = _as_dict(payload.get("error"))
     error_message = error.get("message") if isinstance(error.get("message"), str) else None
+    error_title, setup_hint, error_severity = _error_presentation(
+        provider_id,
+        error_message,
+    )
     login_method = (
         identity.get("loginMethod") if isinstance(identity.get("loginMethod"), str) else None
     )
@@ -356,12 +404,12 @@ def normalize_payload(
         credit_meters=_credit_meters(payload, usage),
         model_usage=_model_usage(payload, usage),
         error_message=error_message,
-        setup_hint=(
-            f"Check CodexBar configuration/auth for {provider_id}." if error_message else None
-        ),
+        setup_hint=setup_hint,
         is_stale=False,
         last_success=_last_success(payload, attempt_time),
         last_attempt=attempt_time,
+        error_title=error_title,
+        error_severity=error_severity,
         raw=payload if include_raw else None,
     )
 

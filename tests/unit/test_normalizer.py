@@ -139,3 +139,29 @@ def test_normalizer_handles_error_payload() -> None:
     assert card.error_message is not None
     assert card.setup_hint is not None
     assert card.last_success is None
+
+
+def test_codex_rpc_timeout_gets_readable_warning_and_recovery_hint() -> None:
+    card = normalize_json(
+        '[{"provider":"codex","source":"codex-cli","error":{"message":'
+        '"Codex RPC timed out waiting for `account/rateLimits/read` reply."}}]'
+    )[0]
+
+    assert card.error_message == (
+        "Codex RPC timed out waiting for `account/rateLimits/read` reply."
+    )
+    assert card.error_title == "Codex usage check timed out"
+    assert card.error_severity == "warning"
+    assert card.setup_hint is not None
+    assert "codex login" in card.setup_hint
+
+
+def test_codex_auth_error_gets_direct_login_instruction() -> None:
+    card = normalize_json(
+        '[{"provider":"codex","source":"oauth","error":{"message":'
+        '"Codex authentication token is missing."}}]'
+    )[0]
+
+    assert card.error_title == "Codex sign-in required"
+    assert card.error_severity == "error"
+    assert card.setup_hint == "Run codex login in a terminal, then click Refresh."

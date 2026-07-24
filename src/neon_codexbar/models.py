@@ -54,6 +54,8 @@ class ProviderCard:
     is_stale: bool
     last_success: datetime | None
     last_attempt: datetime
+    error_title: str | None = None
+    error_severity: str | None = None
     raw: JsonDict | None = None
 
 

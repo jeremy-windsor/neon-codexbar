@@ -10,7 +10,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 
 LINUX_SOURCE_POLICY: dict[str, str] = {
-    "codex": "cli",
+    "codex": "oauth",
     "claude": "oauth",
     "zai": "api",
     "openrouter": "api",

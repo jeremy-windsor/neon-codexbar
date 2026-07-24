@@ -116,7 +116,7 @@ def _apply_staleness(
         if card.last_success is not None:
             last_success_by_provider[card.provider_id] = card.last_success
         last_success = last_success_by_provider.get(card.provider_id)
-        is_stale = last_success is None or (now - last_success) > threshold
+        is_stale = last_success is not None and (now - last_success) > threshold
         if is_stale != card.is_stale or (
             last_success is not None and card.last_success is None
         ):

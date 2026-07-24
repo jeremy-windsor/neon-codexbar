@@ -117,7 +117,7 @@ def test_daemon_tick_fetches_all_enabled_and_normalizes(snapshot_path: Path) -> 
     assert tick.fetch_count == 4
     assert tick.error_count == 0
     assert {(pid, src) for pid, src in runner.fetch_calls} == {
-        ("codex", "cli"),
+        ("codex", "oauth"),
         ("claude", "oauth"),
         ("zai", "api"),
         ("openrouter", "api"),
@@ -349,7 +349,7 @@ def test_apply_staleness_marks_card_when_last_success_is_old() -> None:
     assert by_id["claude"].is_stale is True
 
 
-def test_apply_staleness_marks_stale_when_no_success_recorded() -> None:
+def test_apply_staleness_does_not_mark_unavailable_card_stale_without_data() -> None:
     now = utc_now()
     card = ProviderCard(
         provider_id="zai",
@@ -376,4 +376,4 @@ def test_apply_staleness_marks_stale_when_no_success_recorded() -> None:
         refresh_interval=timedelta(seconds=300),
     )
 
-    assert updated[0].is_stale is True
+    assert updated[0].is_stale is False

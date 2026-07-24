@@ -27,6 +27,14 @@ Window {
                 Qt.exit(1);
                 return;
             }
+            if (store._providerErrorSeverity({
+                    "error_message": "timeout",
+                    "error_severity": "warning"
+                }) !== "warning") {
+                console.error("Provider warning severity was not preserved");
+                Qt.exit(1);
+                return;
+            }
             Qt.exit(0);
         }
     }

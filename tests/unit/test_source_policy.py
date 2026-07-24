@@ -4,7 +4,7 @@ from neon_codexbar.adapter.source_policy import decision_for, source_for
 
 
 def test_linux_source_policy_known_providers() -> None:
-    assert source_for("codex") == "cli"
+    assert source_for("codex") == "oauth"
     assert source_for("claude") == "oauth"
     assert source_for("zai") == "api"
     assert source_for("openrouter") == "api"

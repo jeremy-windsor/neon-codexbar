@@ -75,6 +75,8 @@ upgrade.
 | `model_usage` | array | Per-model breakdown if the provider exposes it; usually empty. |
 | `error_message` | string or null | Human-readable provider-specific failure. **Per-provider, NOT global.** |
 | `setup_hint` | string or null | If `error_message` is set, a CodexBar-side action the user can take. |
+| `error_title` | string or null | Short user-facing summary. The technical `error_message` remains available in diagnostics. |
+| `error_severity` | string or null | `error` or `warning` when an error exists; transient failures such as timeouts are warnings. |
 | `is_stale` | bool | `true` when this card's last successful fetch is older than `2 × refresh_interval`. See "Staleness" below. |
 | `last_success` | ISO-8601 string or null | When this provider last returned valid data. |
 | `last_attempt` | ISO-8601 string | When the daemon most recently tried to fetch this provider. |

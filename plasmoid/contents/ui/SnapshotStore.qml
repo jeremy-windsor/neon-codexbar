@@ -123,6 +123,11 @@ QtObject {
         return maxPct;
     }
 
+    function _providerErrorSeverity(card) {
+        if (!card || !card.error_message) return "";
+        return card.error_severity === "warning" ? "warning" : "error";
+    }
+
     function _compactWindowLabel(window, index) {
         if (!window) return "W" + (index + 1);
         var minutes = window.window_minutes;
@@ -209,12 +214,14 @@ QtObject {
         var maxPct = 0.0;
         var maxCard = null;
         var anyError = false;
+        var anyProviderWarning = false;
         var anyStaleCard = false;
         if (displayCards && displayCards.length) {
             for (var i = 0; i < displayCards.length; ++i) {
                 var c = displayCards[i];
                 if (!c) continue;
-                if (c.error_message) anyError = true;
+                if (_providerErrorSeverity(c) === "error") anyError = true;
+                if (_providerErrorSeverity(c) === "warning") anyProviderWarning = true;
                 if (c.is_stale) anyStaleCard = true;
                 var cardPct = _providerMaxPercent(c);
                 if (cardPct >= maxPct) {
@@ -256,13 +263,14 @@ QtObject {
             trayState = "error";
         } else if (daemonDeadStale) {
             trayState = "stale";
-        } else if (selectedTrayCard && selectedTrayCard.error_message) {
+        } else if (_providerErrorSeverity(selectedTrayCard) === "error") {
             trayState = "error";
         } else if (daemonStaleWarning || (selectedTrayCard && selectedTrayCard.is_stale)) {
             trayState = "stale";
         } else if (trayUsagePercent >= criticalThreshold) {
             trayState = "critical";
-        } else if (trayUsagePercent >= warningThreshold) {
+        } else if (_providerErrorSeverity(selectedTrayCard) === "warning"
+                   || trayUsagePercent >= warningThreshold) {
             trayState = "warning";
         } else {
             trayState = "ok";
@@ -281,7 +289,7 @@ QtObject {
             worstState = "stale";
         } else if (maxPct >= criticalThreshold) {
             worstState = "critical";
-        } else if (maxPct >= warningThreshold) {
+        } else if (anyProviderWarning || maxPct >= warningThreshold) {
             worstState = "warning";
         } else {
             worstState = "ok";

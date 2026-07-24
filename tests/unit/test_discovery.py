@@ -28,7 +28,7 @@ def test_discovery_parses_config_fixture() -> None:
     by_id = {entry.provider_id: entry for entry in entries}
 
     assert by_id["codex"].enabled is True
-    assert by_id["codex"].source == "cli"
+    assert by_id["codex"].source == "oauth"
     assert by_id["claude"].source == "oauth"
     assert by_id["zai"].source == "api"
     assert by_id["openrouter"].source == "api"

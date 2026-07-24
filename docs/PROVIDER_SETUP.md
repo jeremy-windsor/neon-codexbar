@@ -50,7 +50,7 @@ The adapter pins the source per provider:
 
 | Provider | Source | Notes |
 |---|---|---|
-| `codex` | `cli` | uses `~/.codex` auth |
+| `codex` | `oauth` | uses `~/.codex` auth without launching Codex RPC |
 | `claude` | `oauth` | uses Claude Code OAuth auth; avoids Claude CLI probe sessions |
 | `zai` | `api` | requires `Z_AI_API_KEY` env var |
 | `openrouter` | `api` | requires `OPENROUTER_API_KEY` env var |
@@ -105,11 +105,14 @@ New CodexBar CLI features worth future neon-codexbar work:
 ### codex
 
 ```bash
-codexbar usage --provider codex --source cli --format json --pretty
+codexbar usage --provider codex --source oauth --format json --pretty
 ```
 
-Auth is whatever `codex` CLI is logged in as. Returns 2 quota windows (5h /
-1wk) and a credits meter. Reset descriptions use U+202F NARROW NO-BREAK SPACE
+Auth is whatever `codex` CLI is logged in as. If setup or token refresh fails,
+run `codex login`, then refresh the widget. The OAuth source reads the same
+local auth state directly and avoids launching `codex app-server` for every
+poll. Returns the quota windows the account currently exposes plus a credits
+meter when available. Reset descriptions use U+202F NARROW NO-BREAK SPACE
 between time and AM/PM — render as a regular space.
 
 ### claude
