@@ -137,7 +137,11 @@ def test_normalizer_handles_error_payload() -> None:
 
     assert card.provider_id == "zai"
     assert card.error_message is not None
+    assert card.error_title == "Z.ai usage is unavailable"
+    assert card.error_severity == "error"
     assert card.setup_hint is not None
+    assert "Z_AI_API_KEY" in card.setup_hint
+    assert "Coding Plan" in card.setup_hint
     assert card.last_success is None
 
 

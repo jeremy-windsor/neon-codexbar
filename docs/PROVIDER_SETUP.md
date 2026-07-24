@@ -60,6 +60,9 @@ Unknown providers are skipped with a diagnostic. To add a provider, extend
 `src/neon_codexbar/adapter/source_policy.py` and capture a fixture from
 `codexbar usage --provider <id> --source <type> --format json`.
 
+Provider cards show a short recovery instruction instead of raw upstream error
+text. The original provider message remains available under **Show debug**.
+
 CodexBar `v0.42.0` is the latest locally validated release for this document.
 The Linux standalone CLI has reported its packaged version since `v0.25.1`.
 

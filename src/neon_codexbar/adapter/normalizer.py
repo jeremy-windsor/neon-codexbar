@@ -18,6 +18,7 @@ from neon_codexbar.models import (
 DISPLAY_NAMES: dict[str, str] = {
     "codex": "Codex",
     "claude": "Claude Code",
+    "grok": "Grok",
     "zai": "Z.ai",
     "openrouter": "OpenRouter",
 }
@@ -29,6 +30,17 @@ _ZAI_UNRELIABLE_WINDOW_LABELS = {"1 minute window"}
 # That string is useful as a login method, but it is not a subscription plan name.
 _NON_PLAN_LOGIN_PREFIXES = ("balance:",)
 
+_PROVIDER_RECOVERY_HINTS: dict[str, str] = {
+    "codex": "Run codex login in a terminal, then click Refresh.",
+    "claude": "Run claude in a terminal and complete sign-in, then click Refresh.",
+    "grok": "Sign in to Grok again, then click Refresh.",
+    "zai": (
+        "Check Z_AI_API_KEY and confirm the account has an active Coding Plan, "
+        "then click Refresh."
+    ),
+    "openrouter": "Check OPENROUTER_API_KEY and the account balance, then click Refresh.",
+}
+
 
 def _error_presentation(
     provider_id: str,
@@ -38,38 +50,42 @@ def _error_presentation(
 
     if error_message is None:
         return None, None, None
-    if provider_id != "codex":
-        return (
-            error_message,
-            f"Check CodexBar configuration/auth for {provider_id}.",
-            "error",
-        )
 
+    display_name = _display_name(provider_id)
     lowered = error_message.lower()
     if "timed out" in lowered or "timeout" in lowered:
-        return (
-            "Codex usage check timed out",
+        recovery_hint = _PROVIDER_RECOVERY_HINTS.get(
+            provider_id,
             (
-                "Click Refresh to try again. If it keeps failing, run "
-                "codex login in a terminal, then refresh."
+                f"Check CodexBar configuration and authentication for {display_name}, "
+                "then click Refresh."
             ),
+        )
+        return (
+            f"{display_name} usage check timed out",
+            f"Click Refresh to try again. If it keeps failing: {recovery_hint}",
             "warning",
         )
-    if any(
+    if provider_id == "codex" and any(
         marker in lowered
         for marker in ("auth", "credential", "login", "sign in", "token", "unauthorized", "401")
     ):
         return (
             "Codex sign-in required",
-            "Run codex login in a terminal, then click Refresh.",
+            _PROVIDER_RECOVERY_HINTS["codex"],
             "error",
         )
-    return (
-        "Codex usage is unavailable",
+
+    recovery_hint = _PROVIDER_RECOVERY_HINTS.get(
+        provider_id,
         (
-            "Run codex login in a terminal, then click Refresh. "
-            "Open Show debug if it still fails."
+            f"Check CodexBar configuration and authentication for {display_name}, "
+            "then click Refresh."
         ),
+    )
+    return (
+        f"{display_name} usage is unavailable",
+        recovery_hint,
         "error",
     )
 
