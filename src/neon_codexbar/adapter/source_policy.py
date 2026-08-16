@@ -1,7 +1,8 @@
 """Linux-safe CodexBar source policy.
 
-Never use ``--source auto`` on Linux provider fetches. Unknown providers are skipped
-until validated and added here.
+Only use sources that have been validated on Linux. Unknown providers are skipped
+until validated and added here, and ``--source auto`` is allowed only when the
+provider is explicitly pinned to it below.
 """
 
 from __future__ import annotations
@@ -14,7 +15,7 @@ LINUX_SOURCE_POLICY: dict[str, str] = {
     "claude": "oauth",
     "zai": "api",
     "openrouter": "api",
-    "grok": "web",
+    "grok": "auto",
 }
 
 

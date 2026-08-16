@@ -143,7 +143,12 @@ limited to source policy, friendly display names, fixtures, and tests.
 
 ## CodexBar Release Notes
 
-Latest locally validated upstream release: CodexBar `v0.42.0`.
+Latest locally validated upstream release: CodexBar `v0.50.0`.
+
+`v0.50.0` is validated with Grok's `auto` source on Linux. That path lets the
+installed Grok CLI refresh its short-lived OAuth token, then falls back to
+CodexBar's token-authenticated billing request when the CLI billing RPC is not
+available.
 
 `v0.25.1` first mattered on Linux because the standalone CLI archives included the
 `VERSION` file, so `codexbar --version` reports the release tag instead of
@@ -165,6 +170,7 @@ neon-codexbar:
 
 The Linux source policy intentionally remains conservative. A provider is only
 added to `src/neon_codexbar/adapter/source_policy.py` after a Linux-safe source
-is validated and a sanitized fixture is captured. Most browser-cookie/web
+is validated and a sanitized fixture is captured. `auto` is allowed only when
+that exact provider fallback chain has been validated. Most browser-cookie/web
 providers are still macOS-only in upstream CodexBar, so adding them here without
 validation would just generate prettier errors.

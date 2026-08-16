@@ -8,7 +8,7 @@ def test_linux_source_policy_known_providers() -> None:
     assert source_for("claude") == "oauth"
     assert source_for("zai") == "api"
     assert source_for("openrouter") == "api"
-    assert source_for("grok") == "web"
+    assert source_for("grok") == "auto"
 
 
 def test_unknown_provider_is_skipped_not_auto() -> None:

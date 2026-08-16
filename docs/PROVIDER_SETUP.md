@@ -45,8 +45,8 @@ codexbar config dump --format json | jq '.providers[] | select(.enabled==true)'
 
 ## Linux source policy
 
-neon-codexbar refuses `--source auto` on Linux (it picks unreliable defaults).
-The adapter pins the source per provider:
+neon-codexbar pins a validated source per provider. It refuses `--source auto`
+unless the provider is explicitly approved for it in the policy:
 
 | Provider | Source | Notes |
 |---|---|---|
@@ -54,7 +54,7 @@ The adapter pins the source per provider:
 | `claude` | `oauth` | uses Claude Code OAuth auth; avoids Claude CLI probe sessions |
 | `zai` | `api` | requires `Z_AI_API_KEY` env var |
 | `openrouter` | `api` | requires `OPENROUTER_API_KEY` env var |
-| `grok` | `web` | uses the signed-in Grok browser/session credentials supported by CodexBar |
+| `grok` | `auto` | lets the Grok CLI refresh OAuth, then falls back to token-authenticated web billing |
 
 Unknown providers are skipped with a diagnostic. To add a provider, extend
 `src/neon_codexbar/adapter/source_policy.py` and capture a fixture from
@@ -63,7 +63,7 @@ Unknown providers are skipped with a diagnostic. To add a provider, extend
 Provider cards show a short recovery instruction instead of raw upstream error
 text. The original provider message remains available under **Show debug**.
 
-CodexBar `v0.42.0` is the latest locally validated release for this document.
+CodexBar `v0.50.0` is the latest locally validated release for this document.
 The Linux standalone CLI has reported its packaged version since `v0.25.1`.
 
 ## CodexBar v0.25+ provider inventory
@@ -131,6 +131,19 @@ Claude-specific extra windows CodexBar exposes.
 - Avoids the old CLI probe path that created empty Claude Code recents.
 - The old `cli` source still works, but it launches the Claude CLI probe and is
   intentionally not used by neon-codexbar.
+
+### grok
+
+```bash
+codexbar usage --provider grok --source auto --format json --pretty
+```
+
+Grok OAuth access tokens can expire after six hours even while a refresh token
+remains available. CodexBar does not refresh that credential itself. Its Grok
+`auto` source first launches the installed Grok CLI, which refreshes the token,
+then falls back to the token-authenticated billing endpoint when the CLI's ACP
+`x.ai/billing` method is unavailable. Pinning Grok to `web` skips the refresh;
+pinning it to `cli` fails when that ACP billing method returns `Method not found`.
 
 ### zai
 
