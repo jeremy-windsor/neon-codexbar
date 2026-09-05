@@ -97,3 +97,62 @@ def test_write_snapshot_creates_parent_directories(tmp_path: Path) -> None:
     )
     write_snapshot(payload, target)
     assert target.exists()
+
+
+def test_snapshot_does_not_follow_legacy_temporary_symlink(tmp_path: Path) -> None:
+    victim = tmp_path / "victim"
+    victim.write_text("keep me")
+    victim.chmod(0o640)
+    (tmp_path / "snap.json.tmp").symlink_to(victim)
+
+    write_snapshot({"ok": True}, tmp_path / "snap.json")
+
+    assert victim.read_text() == "keep me"
+    assert stat.S_IMODE(victim.stat().st_mode) == 0o640
+
+
+def test_snapshot_refuses_destination_symlink(tmp_path: Path) -> None:
+    victim = tmp_path / "victim"
+    victim.write_text("keep me")
+    target = tmp_path / "snap.json"
+    target.symlink_to(victim)
+
+    with pytest.raises(OSError):
+        write_snapshot({"ok": True}, target)
+
+    assert victim.read_text() == "keep me"
+    assert target.is_symlink()
+
+
+def test_snapshot_is_private_before_publish(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    real_fsync = os.fsync
+
+    def check_fsync(fd: int) -> None:
+        assert stat.S_IMODE(os.fstat(fd).st_mode) == 0o600
+        real_fsync(fd)
+
+    monkeypatch.setattr(os, "fsync", check_fsync)
+    old_umask = os.umask(0)
+    try:
+        write_snapshot({"ok": True}, tmp_path / "snap.json")
+    finally:
+        os.umask(old_umask)
+
+
+def test_snapshot_failed_write_preserves_previous_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    target = tmp_path / "snap.json"
+    target.write_text("previous snapshot")
+
+    def fail_fsync(fd: int) -> None:
+        raise OSError("simulated disk failure")
+
+    monkeypatch.setattr(os, "fsync", fail_fsync)
+    with pytest.raises(OSError, match="simulated disk failure"):
+        write_snapshot({"ok": True}, target)
+
+    assert target.read_text() == "previous snapshot"
+    assert list(tmp_path.iterdir()) == [target]

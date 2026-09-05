@@ -1,7 +1,7 @@
 """Atomic snapshot file producer for the daemon ↔ widget interface.
 
 The widget reads ``~/.cache/neon-codexbar/snapshot.json``. The daemon writes it
-by creating a sibling ``*.tmp`` file and renaming it into place — that rename
+by exclusively creating a private sibling temporary file and renaming it into place — that rename
 is atomic on the same filesystem, which ``~/.cache`` always is.
 """
 
@@ -12,6 +12,7 @@ import os
 from pathlib import Path
 from typing import Any
 
+from neon_codexbar.ipc.private_file import write_private_file
 from neon_codexbar.models import ProviderCard, to_jsonable, utc_now
 
 SNAPSHOT_PATH_ENV_VAR = "NEON_CODEXBAR_SNAPSHOT_PATH"
@@ -55,13 +56,5 @@ def write_snapshot(payload: dict[str, Any], path: Path | None = None) -> Path:
     """Atomically write ``payload`` to ``path`` (default: cache snapshot)."""
 
     target = path or default_snapshot_path()
-    target.parent.mkdir(parents=True, exist_ok=True)
-    tmp = target.with_suffix(target.suffix + ".tmp")
     serialized = json.dumps(payload, sort_keys=True, indent=2)
-    with tmp.open("w", encoding="utf-8") as handle:
-        handle.write(serialized)
-        handle.flush()
-        os.fsync(handle.fileno())
-    os.chmod(tmp, 0o600)
-    tmp.replace(target)
-    return target
+    return write_private_file(target, serialized)

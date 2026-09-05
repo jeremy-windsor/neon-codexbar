@@ -16,7 +16,10 @@ disagrees with the code, the code is wrong; please open an issue.
 
 ## Atomic write semantics
 
-The daemon writes to `<path>.tmp`, fsyncs, then `rename(2)`s into place. On
+The daemon creates a unique sibling temporary file exclusively with mode `0600`,
+writes and fsyncs it, then renames it into place. Existing destination symlinks
+and other non-regular files are refused. The parent directory must be trusted.
+The refresh helper uses the same publication process for its empty sentinel. On
 the same filesystem that is atomic. The widget must therefore be safe to
 re-read on any change notification: a partial file is never visible.
 

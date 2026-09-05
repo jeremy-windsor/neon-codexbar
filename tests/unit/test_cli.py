@@ -4,13 +4,14 @@ import json
 import os
 import subprocess
 import sys
+from argparse import Namespace
 from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 
 from neon_codexbar.adapter.normalizer import normalize_payload
-from neon_codexbar.cli import _dump_json
+from neon_codexbar.cli import _dump_json, cmd_refresh
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "codexbar"
 ROOT = Path(__file__).resolve().parents[2]
@@ -133,3 +134,47 @@ def test_cli_refresh_creates_private_sentinel(tmp_path: Path) -> None:
     assert json.loads(result.stdout)["ok"] is True
     assert sentinel.exists()
     assert sentinel.stat().st_mode & 0o777 == 0o600
+
+
+def test_refresh_refuses_symlink(tmp_path: Path) -> None:
+    victim = tmp_path / "victim"
+    victim.write_text("keep me")
+    victim.chmod(0o640)
+    before = victim.stat()
+    sentinel = tmp_path / "refresh.touch"
+    sentinel.symlink_to(victim)
+
+    result = cmd_refresh(Namespace(snapshot_path=str(tmp_path / "snap.json"), json=True))
+
+    assert result == 1
+    assert sentinel.is_symlink()
+    assert victim.stat().st_mtime_ns == before.st_mtime_ns
+    assert victim.stat().st_mode == before.st_mode
+    assert victim.read_text() == "keep me"
+
+
+def test_refresh_replaces_hardlink_and_supports_repeat_requests(tmp_path: Path) -> None:
+    victim = tmp_path / "victim"
+    victim.write_text("keep me")
+    victim.chmod(0o640)
+    before = victim.stat()
+    sentinel = tmp_path / "refresh.touch"
+    sentinel.hardlink_to(victim)
+    args = Namespace(snapshot_path=str(tmp_path / "snap.json"), json=True)
+
+    assert cmd_refresh(args) == 0
+    assert cmd_refresh(args) == 0
+
+    assert victim.stat().st_mtime_ns == before.st_mtime_ns
+    assert victim.stat().st_mode == before.st_mode
+    assert victim.read_text() == "keep me"
+    assert sentinel.read_text() == ""
+    assert sentinel.stat().st_mode & 0o777 == 0o600
+
+
+def test_cli_redacts_json_inside_command_output(capsys: pytest.CaptureFixture[str]) -> None:
+    _dump_json({"command": {"stdout": '{"apiKey":"dummy-value","providers":[]}'}})
+    result = json.loads(capsys.readouterr().out)
+    assert json.loads(result["command"]["stdout"]) == {
+        "apiKey": "[REDACTED]", "providers": [],
+    }

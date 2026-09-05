@@ -17,6 +17,7 @@ from neon_codexbar.adapter.runner import CodexBarRunner
 from neon_codexbar.adapter.source_policy import LINUX_SOURCE_POLICY
 from neon_codexbar.config import load_config
 from neon_codexbar.diagnostics import redact_secrets
+from neon_codexbar.ipc.private_file import write_private_file
 from neon_codexbar.ipc.snapshot_writer import default_snapshot_path
 from neon_codexbar.models import (
     ProviderCard,
@@ -199,9 +200,7 @@ def cmd_refresh(args: argparse.Namespace) -> int:
     )
     sentinel = snapshot_path.parent / "refresh.touch"
     try:
-        sentinel.parent.mkdir(parents=True, exist_ok=True)
-        sentinel.touch(mode=0o600, exist_ok=True)
-        sentinel.chmod(0o600)
+        write_private_file(sentinel, "")
     except OSError as exc:
         message = f"Could not request daemon refresh: {exc}"
         if args.json:
