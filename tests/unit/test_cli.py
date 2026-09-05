@@ -4,7 +4,13 @@ import json
 import os
 import subprocess
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
+
+import pytest
+
+from neon_codexbar.adapter.normalizer import normalize_payload
+from neon_codexbar.cli import _dump_json
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "codexbar"
 ROOT = Path(__file__).resolve().parents[2]
@@ -77,6 +83,30 @@ def test_cli_fetch_error_fixture_returns_nonzero() -> None:
 
     assert result.returncode == 1
     assert json.loads(result.stdout)["ok"] is False
+
+
+def test_json_output_serializes_cards_before_redacting(capsys: pytest.CaptureFixture[str]) -> None:
+    card = normalize_payload(
+        {
+            "provider": "codex",
+            "usage": {
+                "identity": {"email": "person@example.com", "apiKey": "dummy-value"},
+                "primary": {"usedPercent": 12, "resetsAt": "2026-09-05T01:00:00Z"},
+            },
+        },
+        attempted_at=datetime(2026, 9, 5, tzinfo=UTC),
+    )
+
+    _dump_json({"cards": [card], "command": None})
+
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["command"] is None
+    assert payload["cards"][0]["identity"] == {
+        "email": "user@example.com",
+        "apiKey": "[REDACTED]",
+    }
+    assert payload["cards"][0]["last_attempt"] == "2026-09-05T00:00:00Z"
+    assert payload["cards"][0]["quota_windows"][0]["resets_at"] == "2026-09-05T01:00:00Z"
 
 
 def test_cli_refresh_creates_private_sentinel(tmp_path: Path) -> None:

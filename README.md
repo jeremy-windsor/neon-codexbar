@@ -67,6 +67,11 @@ Runtime files live in standard XDG locations:
 
 `~/.codexbar/` belongs to CodexBar and is not managed by neon-codexbar.
 
+Optional daemon settings in `~/.config/neon-codexbar/config.json` are
+`codexbar_path` and `refresh_interval_seconds` (default: 300). Display settings
+belong to the Plasma widget's settings page. Legacy Python display settings
+are ignored; they never affected the widget.
+
 ## Install
 
 ```bash

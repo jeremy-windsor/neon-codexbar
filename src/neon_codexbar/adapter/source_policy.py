@@ -7,7 +7,6 @@ provider is explicitly pinned to it below.
 
 from __future__ import annotations
 
-from collections.abc import Iterable
 from dataclasses import dataclass
 
 LINUX_SOURCE_POLICY: dict[str, str] = {
@@ -57,11 +56,3 @@ def decision_for(provider_id: str) -> SourceDecision:
             ),
         )
     return SourceDecision(provider_id=normalized, source=source, skipped=False)
-
-
-def apply_policy(provider_ids: Iterable[str]) -> tuple[list[SourceDecision], list[str]]:
-    """Apply source policy to provider IDs, returning decisions and diagnostics."""
-
-    decisions = [decision_for(provider_id) for provider_id in provider_ids]
-    diagnostics = [decision.diagnostic for decision in decisions if decision.diagnostic]
-    return decisions, diagnostics

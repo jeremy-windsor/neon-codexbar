@@ -21,10 +21,6 @@ from neon_codexbar.models import CommandResult
 DEFAULT_TIMEOUT_SECONDS = 60.0
 
 
-class CodexBarUnavailableError(RuntimeError):
-    """Raised when the CodexBar CLI cannot be located."""
-
-
 def _provider_error_message(raw_json: str) -> str | None:
     """Extract provider error messages from CodexBar JSON output."""
 

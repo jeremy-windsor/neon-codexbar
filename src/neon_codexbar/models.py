@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, fields, is_dataclass
+from dataclasses import dataclass, fields, is_dataclass
 from datetime import UTC, datetime
 from typing import Any
 
@@ -132,18 +132,8 @@ def to_jsonable(value: Any) -> Any:
         return value.astimezone(UTC).isoformat().replace("+00:00", "Z")
     if is_dataclass(value):
         return {field.name: to_jsonable(getattr(value, field.name)) for field in fields(value)}
-    if isinstance(value, list):
-        return [to_jsonable(item) for item in value]
-    if isinstance(value, tuple):
+    if isinstance(value, list | tuple):
         return [to_jsonable(item) for item in value]
     if isinstance(value, dict):
         return {str(key): to_jsonable(item) for key, item in value.items()}
     return value
-
-
-def dataclass_asdict(value: Any) -> JsonDict:
-    """Return a JSON-ready dictionary for a dataclass instance."""
-
-    if not is_dataclass(value):
-        raise TypeError("dataclass_asdict() expects a dataclass instance")
-    return to_jsonable(asdict(value))

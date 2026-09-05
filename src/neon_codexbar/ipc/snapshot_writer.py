@@ -12,7 +12,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-from neon_codexbar.models import ProviderCard, dataclass_asdict, to_jsonable, utc_now
+from neon_codexbar.models import ProviderCard, to_jsonable, utc_now
 
 SNAPSHOT_PATH_ENV_VAR = "NEON_CODEXBAR_SNAPSHOT_PATH"
 SCHEMA_VERSION = 1
@@ -41,7 +41,7 @@ def build_snapshot(
         "schema_version": SCHEMA_VERSION,
         "generated_at": to_jsonable(utc_now()),
         "ok": bool(ok) if ok is not None else codexbar_path is not None,
-        "cards": [dataclass_asdict(card) for card in cards],
+        "cards": to_jsonable(cards),
         "diagnostics": list(diagnostics),
         "codexbar": {
             "available": codexbar_path is not None,

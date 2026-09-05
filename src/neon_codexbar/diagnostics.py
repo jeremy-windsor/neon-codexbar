@@ -72,9 +72,3 @@ def redact_secrets(value: Any, *, redact_identity: bool = True) -> Any:
                 redacted[key_str] = redact_secrets(item, redact_identity=redact_identity)
         return redacted
     return value
-
-
-def diagnostic_error(message: str, *, code: str = "diagnostic_error") -> dict[str, str]:
-    """Build a redacted diagnostic error object."""
-
-    return {"code": code, "message": redact_string(message)}
