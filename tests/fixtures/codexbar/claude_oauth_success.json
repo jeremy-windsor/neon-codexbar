@@ -1,0 +1,38 @@
+[
+  {
+    "provider": "claude",
+    "source": "oauth",
+    "version": "2.1.195",
+    "usage": {
+      "identity": {
+        "loginMethod": "Claude Pro",
+        "providerID": "claude"
+      },
+      "loginMethod": "Claude Pro",
+      "primary": {
+        "resetDescription": "Jun 27 at 9:39AM",
+        "resetsAt": "2026-06-27T16:39:59Z",
+        "usedPercent": 97,
+        "windowMinutes": 300
+      },
+      "secondary": {
+        "resetDescription": "Jun 29 at 6:59AM",
+        "resetsAt": "2026-06-29T13:59:59Z",
+        "usedPercent": 42,
+        "windowMinutes": 10080
+      },
+      "tertiary": null,
+      "extraRateWindows": [
+        {
+          "id": "claude-routines",
+          "title": "Daily Routines",
+          "window": {
+            "usedPercent": 0,
+            "windowMinutes": 10080
+          }
+        }
+      ],
+      "updatedAt": "2026-06-27T14:07:30Z"
+    }
+  }
+]

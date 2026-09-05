@@ -4,18 +4,12 @@
 // via XMLHttpRequest against a file:// URL (the standard QML pattern; QML cannot
 // read raw paths directly). Polls every pollingInterval seconds.
 //
-// TODO (verify on real KDE Neon): touching the refresh.touch sentinel via
-// XMLHttpRequest PUT is documented to work on most QML stacks, but the underlying
-// QNetworkAccessManager file scheme is read-only on some Qt builds. If
-// `requestRefresh()` doesn't produce the sentinel, we'll add a tiny shell helper
-// or fall back to invoking `kill -USR1` via a launcher process. For Phase 3 the
-// button at minimum re-loads the snapshot and logs the failure.
-//
-// We deliberately do NOT spawn `touch` via Plasma5Support.DataSource because the
-// contract is "no subprocess spawning, ever." Sentinel writes are pure file I/O.
+// Manual refresh invokes the installed neon-codexbar helper through Plasma's
+// executable data source. The helper only creates the daemon's refresh sentinel.
 
 import QtQuick
 import Qt.labs.platform as Labs
+import org.kde.plasma.plasma5support as Plasma5Support
 
 QtObject {
     id: store
@@ -52,13 +46,6 @@ QtObject {
         return _homeDir + "/.cache/neon-codexbar/snapshot.json";
     }
 
-    readonly property string resolvedSentinelPath: {
-        var p = resolvedPath;
-        var idx = p.lastIndexOf("/");
-        if (idx < 0) return "refresh.touch";
-        return p.substring(0, idx) + "/refresh.touch";
-    }
-
     // ---- Exposed snapshot fields ----
     property bool snapshotOk: false
     property bool codexbarAvailable: false
@@ -80,12 +67,16 @@ QtObject {
     property real trayUsagePercent: 0.0
     property real trayPrimaryUsagePercent: 0.0
     property real traySecondaryUsagePercent: 0.0
-    property string trayPrimaryLabel: "5h"
-    property string traySecondaryLabel: "7d"
+    property var trayWindowItems: []
     property string trayLabel: "max"
+    property var trayCard: null
     property bool trayProviderMissing: false
     property string trayState: "missing"    // ok | warning | critical | error | stale | missing
     property string worstState: "missing"  // ok | warning | critical | error | stale | missing
+    property bool refreshInProgress: false
+    property string refreshError: ""
+    property string _refreshBaseline: ""
+    property int _refreshPollsRemaining: 0
 
     function _toFileUrl(absPath) {
         if (absPath.indexOf("file://") === 0) return absPath;
@@ -132,25 +123,44 @@ QtObject {
         return maxPct;
     }
 
-    function _windowPercent(card, wantedId, wantedLabel, fallbackIndex) {
-        if (!card) return 0.0;
+    function _providerErrorSeverity(card) {
+        if (!card || !card.error_message) return "";
+        return card.error_severity === "warning" ? "warning" : "error";
+    }
+
+    function _compactWindowLabel(window, index) {
+        if (!window) return "W" + (index + 1);
+        var minutes = window.window_minutes;
+        if (typeof minutes === "number" && !isNaN(minutes) && minutes > 0) {
+            if (minutes % 10080 === 0) return (minutes / 10080) + "w";
+            if (minutes % 1440 === 0) return (minutes / 1440) + "d";
+            if (minutes % 60 === 0) return (minutes / 60) + "h";
+            return minutes + "m";
+        }
+        var label = window.window_label || window.reset_description || "";
+        var match = label.toLowerCase().match(/^(\d+)-(minute|hour|day|week) window$/);
+        if (match) {
+            var units = {"minute": "m", "hour": "h", "day": "d", "week": "w"};
+            return match[1] + units[match[2]];
+        }
+        return label || "W" + (index + 1);
+    }
+
+    function _trayWindowItemsForCard(card) {
+        var items = [];
+        if (!card) return items;
         var qws = card.quota_windows || [];
-        var wantedLabelLower = wantedLabel.toLowerCase();
-        for (var i = 0; i < qws.length; ++i) {
+        for (var i = 0; i < qws.length && items.length < 2; ++i) {
             var w = qws[i];
             if (!w) continue;
-            var id = w.id ? w.id.toLowerCase() : "";
-            var label = w.window_label ? w.window_label.toLowerCase() : "";
-            if (id === wantedId || label === wantedLabelLower) {
-                var p = w.used_percent;
-                return (typeof p === "number" && !isNaN(p)) ? p : 0.0;
-            }
+            var percent = w.used_percent;
+            if (typeof percent !== "number" || isNaN(percent)) continue;
+            items.push({
+                "label": _compactWindowLabel(w, i),
+                "percent": percent
+            });
         }
-        if (fallbackIndex >= 0 && fallbackIndex < qws.length) {
-            var fallback = qws[fallbackIndex].used_percent;
-            return (typeof fallback === "number" && !isNaN(fallback)) ? fallback : 0.0;
-        }
-        return 0.0;
+        return items;
     }
 
     function _orderedCards(sourceCards) {
@@ -204,12 +214,14 @@ QtObject {
         var maxPct = 0.0;
         var maxCard = null;
         var anyError = false;
+        var anyProviderWarning = false;
         var anyStaleCard = false;
         if (displayCards && displayCards.length) {
             for (var i = 0; i < displayCards.length; ++i) {
                 var c = displayCards[i];
                 if (!c) continue;
-                if (c.error_message) anyError = true;
+                if (_providerErrorSeverity(c) === "error") anyError = true;
+                if (_providerErrorSeverity(c) === "warning") anyProviderWarning = true;
                 if (c.is_stale) anyStaleCard = true;
                 var cardPct = _providerMaxPercent(c);
                 if (cardPct >= maxPct) {
@@ -223,7 +235,7 @@ QtObject {
         trayUsagePercent = maxPct;
         trayLabel = maxCard ? (maxCard.display_name || maxCard.provider_id || "max") : "max";
         trayProviderMissing = false;
-        var trayCard = maxCard;
+        var selectedTrayCard = maxCard;
         if (trayMode === "selected-provider" && trayProvider && trayProvider.trim().length) {
             var selectedId = trayProvider.trim().toLowerCase();
             trayProviderMissing = true;
@@ -232,14 +244,16 @@ QtObject {
                 if (card && card.provider_id && card.provider_id.toLowerCase() === selectedId) {
                     trayUsagePercent = _providerMaxPercent(card);
                     trayLabel = card.display_name || card.provider_id;
-                    trayCard = card;
+                    selectedTrayCard = card;
                     trayProviderMissing = false;
                     break;
                 }
             }
         }
-        trayPrimaryUsagePercent = _windowPercent(trayCard, "primary", "5-hour window", 0);
-        traySecondaryUsagePercent = _windowPercent(trayCard, "secondary", "7-day window", 1);
+        trayCard = selectedTrayCard;
+        trayWindowItems = _trayWindowItemsForCard(selectedTrayCard);
+        trayPrimaryUsagePercent = trayWindowItems.length > 0 ? trayWindowItems[0].percent : 0.0;
+        traySecondaryUsagePercent = trayWindowItems.length > 1 ? trayWindowItems[1].percent : 0.0;
 
         // trayState mirrors worstState precedence, but its usage/error inputs
         // are scoped to the provider selected for tray display.
@@ -249,13 +263,14 @@ QtObject {
             trayState = "error";
         } else if (daemonDeadStale) {
             trayState = "stale";
-        } else if (trayCard && trayCard.error_message) {
+        } else if (_providerErrorSeverity(selectedTrayCard) === "error") {
             trayState = "error";
-        } else if (daemonStaleWarning || (trayCard && trayCard.is_stale)) {
+        } else if (daemonStaleWarning || (selectedTrayCard && selectedTrayCard.is_stale)) {
             trayState = "stale";
         } else if (trayUsagePercent >= criticalThreshold) {
             trayState = "critical";
-        } else if (trayUsagePercent >= warningThreshold) {
+        } else if (_providerErrorSeverity(selectedTrayCard) === "warning"
+                   || trayUsagePercent >= warningThreshold) {
             trayState = "warning";
         } else {
             trayState = "ok";
@@ -274,7 +289,7 @@ QtObject {
             worstState = "stale";
         } else if (maxPct >= criticalThreshold) {
             worstState = "critical";
-        } else if (maxPct >= warningThreshold) {
+        } else if (anyProviderWarning || maxPct >= warningThreshold) {
             worstState = "warning";
         } else {
             worstState = "ok";
@@ -339,22 +354,57 @@ QtObject {
         }
     }
 
+    function _shellQuote(value) {
+        return "'" + String(value).replace(/'/g, "'\"'\"'") + "'";
+    }
+
     function requestRefresh() {
-        // Try XHR PUT against the sentinel file:// URL. Most QML stacks honor
-        // this for local files; some refuse. When it fails we still kick a
-        // re-read so the user gets immediate feedback.
-        var url = _toFileUrl(resolvedSentinelPath);
-        var xhr = new XMLHttpRequest();
-        xhr.onreadystatechange = function() {
-            if (xhr.readyState !== XMLHttpRequest.DONE) return;
-            store.load();
-        };
-        try {
-            xhr.open("PUT", url);
-            xhr.send("");
-        } catch (e) {
-            console.log("neon-codexbar: touch sentinel TODO: " + e
-                + " (URL=" + url + "). Refresh button only re-read snapshot.");
+        if (refreshInProgress) return;
+        refreshInProgress = true;
+        refreshError = "";
+        _refreshBaseline = generatedAt;
+        _refreshPollsRemaining = 60;
+        var helper = _homeDir + "/.local/bin/neon-codexbar";
+        var command = _shellQuote(helper) + " refresh --json --snapshot-path "
+            + _shellQuote(resolvedPath);
+        refreshCommand.connectSource(command);
+    }
+
+    property var _refreshCommand: Plasma5Support.DataSource {
+        id: refreshCommand
+        engine: "executable"
+        connectedSources: []
+
+        onNewData: {
+            var exitCode = data["exit code"];
+            disconnectSource(sourceName);
+            if (exitCode !== 0) {
+                store.refreshInProgress = false;
+                store.refreshError = data["stderr"] || "Refresh helper failed.";
+                return;
+            }
+            refreshPollTimer.start();
+        }
+    }
+
+    property var _refreshPollTimer: Timer {
+        id: refreshPollTimer
+        interval: 1000
+        repeat: true
+        onTriggered: {
+            if (store.generatedAt && store.generatedAt !== store._refreshBaseline) {
+                stop();
+                store.refreshInProgress = false;
+                store.refreshError = "";
+                return;
+            }
+            if (store._refreshPollsRemaining <= 0) {
+                stop();
+                store.refreshInProgress = false;
+                store.refreshError = "Daemon did not publish a fresh snapshot.";
+                return;
+            }
+            store._refreshPollsRemaining -= 1;
             store.load();
         }
     }

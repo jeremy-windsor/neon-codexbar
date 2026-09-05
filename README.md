@@ -44,9 +44,9 @@ provider-specific scraping or API behavior in the widget.
 - Compact tray icon supports:
   - percent in ring
   - percent only
-  - 5h / 7d bars
-  - 5h / 7d circles
-  - 5h / 7d tiles
+  - provider window bars
+  - provider window circles
+  - provider window tiles
 
 ## Runtime Flow
 
@@ -62,7 +62,8 @@ Runtime files live in standard XDG locations:
 
 - snapshot: `~/.cache/neon-codexbar/snapshot.json`
 - systemd user unit: `~/.config/systemd/user/neon-codexbar.service`
-- optional auth env drop-in: `~/.config/neon-codexbar/auth.env`
+- optional auth file referenced by a user-service drop-in:
+  `~/.config/neon-codexbar/auth.env`
 
 `~/.codexbar/` belongs to CodexBar and is not managed by neon-codexbar.
 
@@ -108,6 +109,11 @@ neon-codexbar rejects secret-looking config keys by design. Put provider config
 in `~/.codexbar/config.json`, provider CLI auth files, or a user-owned systemd
 environment/drop-in as described in `docs/PROVIDER_SETUP.md`.
 
+Optional daemon settings in `~/.config/neon-codexbar/config.json` are
+`codexbar_path` and `refresh_interval_seconds` (default: 300). Display settings
+belong to the Plasma widget's settings page. Legacy Python display settings
+are ignored; they never affected the widget.
+
 For a quick check:
 
 ```bash
@@ -143,6 +149,8 @@ systemctl --user restart plasma-plasmashell.service
 ## Verify
 
 ```bash
+python3 -m venv .venv
+.venv/bin/python -m pip install -e '.[dev]'
 .venv/bin/python -m pytest
 .venv/bin/python -m ruff check .
 systemctl --user status neon-codexbar.service
@@ -162,16 +170,17 @@ PY
 
 ## Refresh Behavior
 
-The daemon refreshes providers on its configured interval and also supports an
-early refresh via `SIGUSR1`.
+The daemon refreshes providers on its configured interval. The popup and
+settings page call `neon-codexbar refresh`, which creates the daemon's refresh
+sentinel. `SIGUSR1` remains available for scripts.
 
 Measured on this machine:
 
 - Codex CLI source: about 2 seconds
-- Claude CLI source: about 16 seconds
+- Claude OAuth source: about 2 seconds
 - z.ai API source: under 1 second
-- full daemon tick: about 17 seconds because providers fetch in parallel and
-  Claude is the slowest source
+- full daemon tick: usually under 3 seconds when all enabled providers use
+  Codex/OAuth/API sources
 
 The current default refresh cadence is conservative. Shorter intervals should
 be tested carefully because some provider sources are CLI-driven and may be
@@ -193,9 +202,14 @@ limited to source policy, friendly display names, fixtures, and tests.
 
 ## CodexBar Release Notes
 
-Latest checked upstream release: CodexBar `v0.25.1`, published 2026-05-11.
+Latest locally validated upstream release: CodexBar `v0.50.0`.
 
-`v0.25.1` matters on Linux because the standalone CLI archives now include the
+`v0.50.0` is validated with Grok's `auto` source on Linux. That path lets the
+installed Grok CLI refresh its short-lived OAuth token, then falls back to
+CodexBar's token-authenticated billing request when the CLI billing RPC is not
+available.
+
+`v0.25.1` first mattered on Linux because the standalone CLI archives included the
 `VERSION` file, so `codexbar --version` reports the release tag instead of
 `CodexBar unknown`.
 
@@ -215,6 +229,7 @@ neon-codexbar:
 
 The Linux source policy intentionally remains conservative. A provider is only
 added to `src/neon_codexbar/adapter/source_policy.py` after a Linux-safe source
-is validated and a sanitized fixture is captured. Most browser-cookie/web
+is validated and a sanitized fixture is captured. `auto` is allowed only when
+that exact provider fallback chain has been validated. Most browser-cookie/web
 providers are still macOS-only in upstream CodexBar, so adding them here without
 validation would just generate prettier errors.

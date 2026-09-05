@@ -1,14 +1,14 @@
-"""neon-codexbar UI-only configuration.
+"""neon-codexbar runtime configuration.
 
 Provider credentials belong to CodexBar, provider CLIs, or CodexBar-supported
-environment variables. This module deliberately stores only UI/runtime preferences.
+environment variables. Display preferences belong to the Plasma widget.
 """
 
 from __future__ import annotations
 
 import json
 import os
-from dataclasses import dataclass, field, fields
+from dataclasses import dataclass, fields
 from pathlib import Path
 from typing import Any
 
@@ -27,15 +27,10 @@ SENSITIVE_CONFIG_KEY_FRAGMENTS = (
 
 @dataclass(slots=True)
 class AppConfig:
-    """UI/runtime preferences owned by neon-codexbar."""
+    """Runtime preferences owned by neon-codexbar."""
 
-    version: int = 1
     codexbar_path: str | None = None
     refresh_interval_seconds: int = 300
-    warning_threshold_percent: int = 70
-    critical_threshold_percent: int = 90
-    provider_display_mode: str = "enabled-only"
-    provider_overrides: dict[str, dict[str, Any]] = field(default_factory=dict)
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> AppConfig:
@@ -43,19 +38,6 @@ class AppConfig:
 
         known = {item.name for item in fields(cls)}
         return cls(**{key: value for key, value in data.items() if key in known})
-
-    def to_dict(self) -> dict[str, Any]:
-        """Return config as a serializable dictionary."""
-
-        return {
-            "version": self.version,
-            "codexbar_path": self.codexbar_path,
-            "refresh_interval_seconds": self.refresh_interval_seconds,
-            "warning_threshold_percent": self.warning_threshold_percent,
-            "critical_threshold_percent": self.critical_threshold_percent,
-            "provider_display_mode": self.provider_display_mode,
-            "provider_overrides": self.provider_overrides,
-        }
 
 
 def _contains_sensitive_key(value: Any) -> bool:

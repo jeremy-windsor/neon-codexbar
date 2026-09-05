@@ -136,6 +136,35 @@ def test_fetch_provider_requests_json_without_pretty() -> None:
     assert "--pretty" not in command
 
 
+def test_fetch_provider_allows_policy_approved_auto_source() -> None:
+    args = (
+        "--provider",
+        "grok",
+        "--source",
+        "auto",
+        "--format",
+        "json",
+    )
+    runner = FakeRunner({args: _result(args, "[]")})
+
+    result = runner.fetch_provider("grok", "auto")
+
+    assert result.ok is True
+    assert runner.calls == [list(args)]
+
+
+def test_fetch_provider_rejects_unapproved_auto_source() -> None:
+    runner = FakeRunner({})
+
+    result = runner.fetch_provider("codex", "auto")
+
+    assert result.ok is False
+    assert result.exit_code == 2
+    assert result.error is not None
+    assert "unapproved --source auto" in result.error
+    assert runner.calls == []
+
+
 def test_fetch_provider_surfaces_json_error_from_stdout() -> None:
     args = (
         "--provider",
@@ -162,5 +191,5 @@ def test_fetch_provider_surfaces_json_error_from_stdout() -> None:
     assert result.error == "No available fetch strategy for zai."
 
 
-def test_default_timeout_has_headroom_for_slow_claude_cli_fetches() -> None:
+def test_default_timeout_has_headroom_for_slow_provider_cli_fetches() -> None:
     assert DEFAULT_TIMEOUT_SECONDS >= 60.0

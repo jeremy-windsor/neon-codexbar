@@ -1,4 +1,4 @@
-"""Command line interface for Phase 1 neon-codexbar."""
+"""Command line interface for neon-codexbar."""
 
 from __future__ import annotations
 
@@ -6,7 +6,6 @@ import argparse
 import json
 import sys
 from collections.abc import Sequence
-from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -18,32 +17,18 @@ from neon_codexbar.adapter.runner import CodexBarRunner
 from neon_codexbar.adapter.source_policy import LINUX_SOURCE_POLICY
 from neon_codexbar.config import load_config
 from neon_codexbar.diagnostics import redact_secrets
+from neon_codexbar.ipc.private_file import write_private_file
+from neon_codexbar.ipc.snapshot_writer import default_snapshot_path
 from neon_codexbar.models import (
     ProviderCard,
     ProviderConfigEntry,
-    dataclass_asdict,
     to_jsonable,
     utc_now,
 )
 
 
 def _dump_json(payload: Any) -> None:
-    print(json.dumps(to_jsonable(redact_secrets(payload)), indent=2, sort_keys=True))
-
-
-def _entry_to_dict(entry: ProviderConfigEntry) -> dict[str, Any]:
-    return to_jsonable(asdict(entry))
-
-
-def _card_to_dict(card: ProviderCard) -> dict[str, Any]:
-    return dataclass_asdict(card)
-
-
-def _command_result_payload(result: Any) -> dict[str, Any] | None:
-    if result is None:
-        return None
-    payload = dataclass_asdict(result)
-    return redact_secrets(payload)
+    print(json.dumps(redact_secrets(to_jsonable(payload)), indent=2, sort_keys=True))
 
 
 def _runner(args: argparse.Namespace) -> CodexBarRunner:
@@ -69,12 +54,12 @@ def cmd_discover(args: argparse.Namespace) -> int:
     result = discover(runner)
     payload = {
         "ok": result.ok,
-        "providers": [_entry_to_dict(entry) for entry in result.providers],
+        "providers": result.providers,
         "diagnostics": result.diagnostics,
-        "command": _command_result_payload(result.command_result),
+        "command": result.command_result,
     }
     _dump_json(payload)
-    return 0
+    return 0 if result.ok else 1
 
 
 def _error_card(
@@ -119,10 +104,9 @@ def cmd_fetch(args: argparse.Namespace) -> int:
     if args.fixture:
         raw = Path(args.fixture).expanduser().read_text(encoding="utf-8")
         cards = normalize_json(raw, attempted_at=attempted_at)
-        _dump_json(
-            {"ok": True, "cards": [_card_to_dict(card) for card in cards], "diagnostics": []}
-        )
-        return 0
+        ok = bool(cards) and all(card.error_message is None for card in cards)
+        _dump_json({"ok": ok, "cards": cards, "diagnostics": []})
+        return 0 if ok else 1
 
     discovery = discover(runner)
     cards: list[ProviderCard] = []
@@ -134,7 +118,7 @@ def cmd_fetch(args: argparse.Namespace) -> int:
                 "ok": False,
                 "cards": [],
                 "diagnostics": [message],
-                "discovery_command": _command_result_payload(discovery.command_result),
+                "discovery_command": discovery.command_result,
             }
         )
         return 1
@@ -171,13 +155,14 @@ def cmd_fetch(args: argparse.Namespace) -> int:
             )
             diagnostics.append(f"{entry.provider_id}: invalid CodexBar JSON: {exc}")
 
+    ok = bool(cards) and all(card.error_message is None for card in cards)
     payload = {
-        "ok": all(card.error_message is None for card in cards),
-        "cards": [_card_to_dict(card) for card in cards],
+        "ok": ok,
+        "cards": cards,
         "diagnostics": diagnostics,
     }
     _dump_json(payload)
-    return 0 if cards else 1
+    return 0 if ok else 1
 
 
 def cmd_diagnose(args: argparse.Namespace) -> int:
@@ -196,14 +181,38 @@ def cmd_diagnose(args: argparse.Namespace) -> int:
             "available": located is not None,
             "path": located,
             "version": version_result.stdout.strip() if version_result.ok else None,
-            "version_command": _command_result_payload(version_result),
+            "version_command": version_result,
         },
         "source_policy": LINUX_SOURCE_POLICY,
-        "providers": [_entry_to_dict(entry) for entry in discovery.providers],
+        "providers": discovery.providers,
         "diagnostics": discovery.diagnostics,
-        "discovery_command": _command_result_payload(discovery.command_result),
+        "discovery_command": discovery.command_result,
     }
     _dump_json(payload)
+    return 0 if payload["ok"] else 1
+
+
+def cmd_refresh(args: argparse.Namespace) -> int:
+    """Ask the daemon for an early tick by creating its sentinel file."""
+
+    snapshot_path = (
+        Path(args.snapshot_path).expanduser() if args.snapshot_path else default_snapshot_path()
+    )
+    sentinel = snapshot_path.parent / "refresh.touch"
+    try:
+        write_private_file(sentinel, "")
+    except OSError as exc:
+        message = f"Could not request daemon refresh: {exc}"
+        if args.json:
+            _dump_json({"ok": False, "error": message})
+        else:
+            print(message, file=sys.stderr)
+        return 1
+
+    if args.json:
+        _dump_json({"ok": True, "refresh_sentinel": str(sentinel)})
+    else:
+        print(f"Refresh requested: {sentinel}")
     return 0
 
 
@@ -241,6 +250,11 @@ def build_parser() -> argparse.ArgumentParser:
     diagnose_parser = subparsers.add_parser("diagnose", help="emit redacted diagnostic bundle")
     diagnose_parser.add_argument("--json", action="store_true", required=True, help="emit JSON")
     diagnose_parser.set_defaults(func=cmd_diagnose)
+
+    refresh_parser = subparsers.add_parser("refresh", help="request an early daemon refresh")
+    refresh_parser.add_argument("--json", action="store_true", help="emit JSON")
+    refresh_parser.add_argument("--snapshot-path", help="snapshot path whose daemon to refresh")
+    refresh_parser.set_defaults(func=cmd_refresh)
 
     return parser
 

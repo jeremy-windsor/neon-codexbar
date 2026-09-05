@@ -1,19 +1,20 @@
 """Linux-safe CodexBar source policy.
 
-Never use ``--source auto`` on Linux provider fetches. Unknown providers are skipped
-until validated and added here.
+Only use sources that have been validated on Linux. Unknown providers are skipped
+until validated and added here, and ``--source auto`` is allowed only when the
+provider is explicitly pinned to it below.
 """
 
 from __future__ import annotations
 
-from collections.abc import Iterable
 from dataclasses import dataclass
 
 LINUX_SOURCE_POLICY: dict[str, str] = {
-    "codex": "cli",
-    "claude": "cli",
+    "codex": "oauth",
+    "claude": "oauth",
     "zai": "api",
     "openrouter": "api",
+    "grok": "auto",
 }
 
 
@@ -55,11 +56,3 @@ def decision_for(provider_id: str) -> SourceDecision:
             ),
         )
     return SourceDecision(provider_id=normalized, source=source, skipped=False)
-
-
-def apply_policy(provider_ids: Iterable[str]) -> tuple[list[SourceDecision], list[str]]:
-    """Apply source policy to provider IDs, returning decisions and diagnostics."""
-
-    decisions = [decision_for(provider_id) for provider_id in provider_ids]
-    diagnostics = [decision.diagnostic for decision in decisions if decision.diagnostic]
-    return decisions, diagnostics

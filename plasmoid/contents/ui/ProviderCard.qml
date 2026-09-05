@@ -163,9 +163,12 @@ Rectangle {
         // Per-provider error banner.
         StatusBanner {
             visible: card && card.error_message && card.error_message.length > 0
-            title: card && card.error_message ? card.error_message : ""
+            title: {
+                if (!card) return "";
+                return card.error_title || card.error_message || "";
+            }
             detail: card && card.setup_hint ? card.setup_hint : ""
-            severity: "error"
+            severity: card && card.error_severity ? card.error_severity : "error"
         }
 
         // Quota windows (in given order).

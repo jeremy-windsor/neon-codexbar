@@ -10,18 +10,15 @@ from collections.abc import Sequence
 from dataclasses import replace
 from pathlib import Path
 
+from neon_codexbar.adapter.source_policy import source_for
 from neon_codexbar.config import AppConfig
 from neon_codexbar.diagnostics import redact_string
 from neon_codexbar.models import CommandResult
 
-# Claude CLI provider fetches are usually ~17-20s on this machine, but can
-# drift past 30s when Claude's plugin/session startup is cold. Keep enough
-# headroom that a slow valid fetch does not become a false provider outage.
+# Some provider sources still shell out to heavyweight CLIs and can drift past
+# 30s when their plugin/session startup is cold. Keep enough headroom that a
+# slow valid fetch does not become a false provider outage.
 DEFAULT_TIMEOUT_SECONDS = 60.0
-
-
-class CodexBarUnavailableError(RuntimeError):
-    """Raised when the CodexBar CLI cannot be located."""
 
 
 def _provider_error_message(raw_json: str) -> str | None:
@@ -217,15 +214,19 @@ class CodexBarRunner:
     def fetch_provider(self, provider_id: str, source: str) -> CommandResult:
         """Fetch one provider through CodexBar with explicit source and JSON output."""
 
-        if source == "auto":
+        if source == "auto" and source_for(provider_id) != "auto":
+            message = (
+                f"neon-codexbar refuses unapproved --source auto for provider "
+                f"'{provider_id}' on Linux."
+            )
             return CommandResult(
                 command=["codexbar", "--provider", provider_id, "--source", source],
                 stdout="",
-                stderr="neon-codexbar refuses to use --source auto on Linux.",
+                stderr=message,
                 exit_code=2,
                 timed_out=False,
                 duration_seconds=0.0,
-                error="neon-codexbar refuses to use --source auto on Linux.",
+                error=message,
             )
         result = self.run(
             [

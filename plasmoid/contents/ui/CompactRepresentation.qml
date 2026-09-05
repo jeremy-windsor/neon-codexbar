@@ -15,22 +15,12 @@ Item {
     property var plasmoidItem
     // "percent-ring" (default) draws the colored ring with centered percent.
     // "percent-only" hides the ring and shows the percent text larger.
-    // "two-bars", "two-circles", and "two-tiles" show 5-hour and 7-day
-    // usage as side-by-side mini widgets.
+    // Multi-window styles show up to two windows from the selected provider.
     property string trayIconStyle: "percent-ring"
     property string traySingleWindow: "highest"
     property bool trayShowProvider: false
 
-    property var _windowItems: [
-        {
-            "label": store ? store.trayPrimaryLabel : "5h",
-            "percent": store ? store.trayPrimaryUsagePercent : 0
-        },
-        {
-            "label": store ? store.traySecondaryLabel : "7d",
-            "percent": store ? store.traySecondaryUsagePercent : 0
-        }
-    ]
+    property var _windowItems: store ? store.trayWindowItems : []
 
     // Left-click toggles popup. Keep this minimal and provider-agnostic.
     MouseArea {
@@ -54,7 +44,7 @@ Item {
                    Kirigami.Units.gridUnit * 4)
         : 0
     readonly property int _basePreferredWidth: root._showMulti
-        ? Kirigami.Units.iconSizes.medium * 2.7
+        ? Kirigami.Units.iconSizes.medium * (root._windowItems.length > 1 ? 2.7 : 1.7)
         : Kirigami.Units.iconSizes.medium
     readonly property int _visualWidth: Math.max(Kirigami.Units.iconSizes.small,
                                                  (parent ? parent.width : width) - _providerLabelWidth)
@@ -65,7 +55,8 @@ Item {
     readonly property bool _showBars: trayIconStyle === "two-bars"
     readonly property bool _showCircles: trayIconStyle === "two-circles"
     readonly property bool _showTiles: trayIconStyle === "two-tiles"
-    readonly property bool _showMulti: _showBars || _showCircles || _showTiles
+    readonly property bool _showMulti: (_showBars || _showCircles || _showTiles)
+                                              && _windowItems.length > 0
     readonly property bool _showProviderLabel: trayShowProvider && store && store.trayLabel
                                             && store.trayLabel !== "max"
     readonly property real _singleUsagePercent: {
@@ -163,7 +154,7 @@ Item {
     }
 
     ColumnLayout {
-        visible: root._showBars
+        visible: root._showBars && root._showMulti
         anchors.centerIn: parent
         anchors.horizontalCenterOffset: root._visualCenterOffset
         width: Math.max(54, root._visualWidth - 2)
@@ -221,7 +212,7 @@ Item {
     }
 
     RowLayout {
-        visible: root._showCircles
+        visible: root._showCircles && root._showMulti
         anchors.centerIn: parent
         anchors.horizontalCenterOffset: root._visualCenterOffset
         width: Math.max(52, root._visualWidth - 2)
@@ -275,7 +266,7 @@ Item {
     }
 
     RowLayout {
-        visible: root._showTiles
+        visible: root._showTiles && root._showMulti
         anchors.centerIn: parent
         anchors.horizontalCenterOffset: root._visualCenterOffset
         width: Math.max(50, root._visualWidth - 2)

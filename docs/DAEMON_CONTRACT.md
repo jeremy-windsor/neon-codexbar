@@ -12,11 +12,14 @@ disagrees with the code, the code is wrong; please open an issue.
 | Override env | `NEON_CODEXBAR_SNAPSHOT_PATH` (absolute or `~`-relative) |
 | Override CLI | `neon-codexbar-daemon --snapshot-path /path/to/snapshot.json` |
 | Mode | `0600` (user-only) |
-| Ownership | The daemon writes; the widget reads. The widget MUST NOT write or unlink. |
+| Ownership | The daemon writes; the widget reads. The refresh helper writes only the request sentinel. |
 
 ## Atomic write semantics
 
-The daemon writes to `<path>.tmp`, fsyncs, then `rename(2)`s into place. On
+The daemon creates a unique sibling temporary file exclusively with mode `0600`,
+writes and fsyncs it, then renames it into place. Existing destination symlinks
+and other non-regular files are refused. The parent directory must be trusted.
+The refresh helper uses the same publication process for its empty sentinel. On
 the same filesystem that is atomic. The widget must therefore be safe to
 re-read on any change notification: a partial file is never visible.
 
@@ -75,6 +78,8 @@ upgrade.
 | `model_usage` | array | Per-model breakdown if the provider exposes it; usually empty. |
 | `error_message` | string or null | Human-readable provider-specific failure. **Per-provider, NOT global.** |
 | `setup_hint` | string or null | If `error_message` is set, a CodexBar-side action the user can take. |
+| `error_title` | string or null | Short user-facing summary. The technical `error_message` remains available in diagnostics. |
+| `error_severity` | string or null | `error` or `warning` when an error exists; transient failures such as timeouts are warnings. |
 | `is_stale` | bool | `true` when this card's last successful fetch is older than `2 × refresh_interval`. See "Staleness" below. |
 | `last_success` | ISO-8601 string or null | When this provider last returned valid data. |
 | `last_attempt` | ISO-8601 string | When the daemon most recently tried to fetch this provider. |
@@ -145,11 +150,12 @@ back in.
 
 ## Manual refresh triggers
 
-Two equivalent ways for the widget (or any external script) to ask the
+Three equivalent ways for the widget (or any external script) to ask the
 daemon to refresh sooner than `refresh_interval`:
 
 | Method | How |
 |---|---|
+| Helper | `neon-codexbar refresh` (used by the widget) |
 | Sentinel file | `touch ~/.cache/neon-codexbar/refresh.touch` (relative to the snapshot directory). Daemon consumes (deletes) it, then runs a tick. |
 | Signal | `kill -USR1 $(pgrep -u $UID -x neon-codexbar-d)` |
 
@@ -159,7 +165,7 @@ Both interrupt the inter-tick sleep within ~1 second.
 
 | | Daemon | Widget |
 |---|---|---|
-| Spawning subprocesses | yes | **no, ever** |
+| Spawning provider subprocesses | yes | no; refresh invokes only the fixed neon-codexbar helper |
 | Reading `~/.codexbar/config.json` | yes (via `codexbar config dump`) | no |
 | Writing the snapshot | yes | no |
 | Reading the snapshot | no | yes |

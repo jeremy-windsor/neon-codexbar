@@ -79,8 +79,9 @@ Item {
                 icon.name: "view-refresh"
                 text: "Refresh"
                 display: PlasmaComponents.AbstractButton.IconOnly
+                enabled: store && !store.refreshInProgress
                 onClicked: if (store) store.requestRefresh()
-                QQC2.ToolTip.text: "Touch refresh sentinel"
+                QQC2.ToolTip.text: store && store.refreshInProgress ? "Refreshing" : "Refresh"
                 QQC2.ToolTip.visible: hovered
                 QQC2.ToolTip.delay: 500
             }
@@ -97,6 +98,12 @@ Item {
         }
 
         // ----- Global banners -----
+        StatusBanner {
+            visible: store && store.refreshError && store.refreshError.length > 0
+            title: "Refresh failed"
+            detail: store ? store.refreshError : ""
+            severity: "error"
+        }
         StatusBanner {
             visible: store && store.readError && store.readError.length > 0
             title: "Snapshot unavailable"

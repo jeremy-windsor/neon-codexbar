@@ -18,6 +18,7 @@ from neon_codexbar.models import (
 DISPLAY_NAMES: dict[str, str] = {
     "codex": "Codex",
     "claude": "Claude Code",
+    "grok": "Grok",
     "zai": "Z.ai",
     "openrouter": "OpenRouter",
 }
@@ -28,6 +29,65 @@ _ZAI_UNRELIABLE_WINDOW_LABELS = {"1 minute window"}
 # OpenRouter exposes credit balance as loginMethod (for example, "Balance: $74.50").
 # That string is useful as a login method, but it is not a subscription plan name.
 _NON_PLAN_LOGIN_PREFIXES = ("balance:",)
+
+_PROVIDER_RECOVERY_HINTS: dict[str, str] = {
+    "codex": "Run codex login in a terminal, then click Refresh.",
+    "claude": "Run claude in a terminal and complete sign-in, then click Refresh.",
+    "grok": "Sign in to Grok again, then click Refresh.",
+    "zai": (
+        "Check Z_AI_API_KEY and confirm the account has an active Coding Plan, "
+        "then click Refresh."
+    ),
+    "openrouter": "Check OPENROUTER_API_KEY and the account balance, then click Refresh.",
+}
+
+
+def _error_presentation(
+    provider_id: str,
+    error_message: str | None,
+) -> tuple[str | None, str | None, str | None]:
+    """Return a short title, recovery hint, and severity for a provider error."""
+
+    if error_message is None:
+        return None, None, None
+
+    display_name = _display_name(provider_id)
+    lowered = error_message.lower()
+    if "timed out" in lowered or "timeout" in lowered:
+        recovery_hint = _PROVIDER_RECOVERY_HINTS.get(
+            provider_id,
+            (
+                f"Check CodexBar configuration and authentication for {display_name}, "
+                "then click Refresh."
+            ),
+        )
+        return (
+            f"{display_name} usage check timed out",
+            f"Click Refresh to try again. If it keeps failing: {recovery_hint}",
+            "warning",
+        )
+    if provider_id == "codex" and any(
+        marker in lowered
+        for marker in ("auth", "credential", "login", "sign in", "token", "unauthorized", "401")
+    ):
+        return (
+            "Codex sign-in required",
+            _PROVIDER_RECOVERY_HINTS["codex"],
+            "error",
+        )
+
+    recovery_hint = _PROVIDER_RECOVERY_HINTS.get(
+        provider_id,
+        (
+            f"Check CodexBar configuration and authentication for {display_name}, "
+            "then click Refresh."
+        ),
+    )
+    return (
+        f"{display_name} usage is unavailable",
+        recovery_hint,
+        "error",
+    )
 
 
 def _as_dict(value: Any) -> JsonDict:
@@ -117,6 +177,35 @@ def _normalize_window(
     )
 
 
+def _duration_label_from_seconds(seconds: float | None) -> str | None:
+    if seconds is None or seconds <= 3600:
+        return None
+    days = int((seconds / 86400) + 0.5)
+    if 4 <= days <= 12:
+        return "Weekly"
+    if 20 <= days <= 45:
+        return "Monthly"
+    return None
+
+
+def _grok_window_label(
+    window_id: str,
+    raw_window: JsonDict,
+    attempted_at: datetime,
+) -> str | None:
+    if window_id != "primary":
+        return None
+
+    window_minutes = _as_int(raw_window.get("windowMinutes"))
+    if window_minutes is not None:
+        return _duration_label_from_seconds(window_minutes * 60)
+
+    resets_at = parse_datetime(raw_window.get("resetsAt"))
+    if resets_at is None:
+        return None
+    return _duration_label_from_seconds((resets_at - attempted_at).total_seconds())
+
+
 def _is_unreliable_quota_window(provider_id: str, raw_window: JsonDict) -> bool:
     """Drop known provider metadata that does not represent a useful quota."""
 
@@ -130,20 +219,25 @@ def _is_unreliable_quota_window(provider_id: str, raw_window: JsonDict) -> bool:
     )
 
 
-def _quota_windows(provider_id: str, usage: JsonDict) -> list[QuotaWindow]:
+def _quota_windows(
+    provider_id: str,
+    usage: JsonDict,
+    attempted_at: datetime,
+) -> list[QuotaWindow]:
     windows: list[QuotaWindow] = []
     for key in _WINDOW_KEYS:
         raw_window = _as_dict(usage.get(key))
         if not raw_window or _is_unreliable_quota_window(provider_id, raw_window):
             continue
+        window_label = (
+            raw_window.get("title") if isinstance(raw_window.get("title"), str) else None
+        )
+        if provider_id == "grok" and window_label is None:
+            window_label = _grok_window_label(key, raw_window, attempted_at)
         windows.append(
             _normalize_window(
                 window_id=key,
-                window_label=(
-                    raw_window.get("title")
-                    if isinstance(raw_window.get("title"), str)
-                    else None
-                ),
+                window_label=window_label,
                 raw_window=raw_window,
             )
         )
@@ -278,19 +372,12 @@ def _model_usage(payload: JsonDict, usage: JsonDict) -> list[JsonDict]:
     return []
 
 
-def _last_success(payload: JsonDict, usage: JsonDict) -> datetime | None:
+def _last_success(payload: JsonDict, attempted_at: datetime) -> datetime | None:
+    """Return when this successful fetch happened, not provider cache age."""
+
     if payload.get("error") is not None:
         return None
-    for value in (
-        usage.get("updatedAt"),
-        _as_dict(payload.get("credits")).get("updatedAt"),
-        _as_dict(usage.get("openRouterUsage")).get("updatedAt"),
-        _as_dict(payload.get("openaiDashboard")).get("updatedAt"),
-    ):
-        parsed = parse_datetime(value)
-        if parsed is not None:
-            return parsed
-    return None
+    return attempted_at
 
 
 def normalize_payload(
@@ -308,6 +395,10 @@ def normalize_payload(
     identity = _identity_from_payload(payload, usage)
     error = _as_dict(payload.get("error"))
     error_message = error.get("message") if isinstance(error.get("message"), str) else None
+    error_title, setup_hint, error_severity = _error_presentation(
+        provider_id,
+        error_message,
+    )
     login_method = (
         identity.get("loginMethod") if isinstance(identity.get("loginMethod"), str) else None
     )
@@ -325,16 +416,16 @@ def normalize_payload(
         identity=identity,
         plan=plan,
         login_method=login_method,
-        quota_windows=_quota_windows(provider_id, usage),
+        quota_windows=_quota_windows(provider_id, usage, attempt_time),
         credit_meters=_credit_meters(payload, usage),
         model_usage=_model_usage(payload, usage),
         error_message=error_message,
-        setup_hint=(
-            f"Check CodexBar configuration/auth for {provider_id}." if error_message else None
-        ),
+        setup_hint=setup_hint,
         is_stale=False,
-        last_success=_last_success(payload, usage),
+        last_success=_last_success(payload, attempt_time),
         last_attempt=attempt_time,
+        error_title=error_title,
+        error_severity=error_severity,
         raw=payload if include_raw else None,
     )
 

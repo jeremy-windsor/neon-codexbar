@@ -4,6 +4,7 @@ import QtQuick.Layouts
 import Qt.labs.platform as Labs
 import org.kde.kcmutils as KCM
 import org.kde.kirigami 2.20 as Kirigami
+import org.kde.plasma.plasma5support as Plasma5Support
 
 // Standard Plasma 6 KConfigXT pattern: properties named cfg_<entry> are
 // auto-bound to the matching <entry name> in main.xml via plasma's config dialog.
@@ -33,6 +34,10 @@ KCM.SimpleKCM {
     property bool _loadingProviders: false
     property bool _syncingProviders: false
     property string providerReadError: ""
+    property string providerGeneratedAt: ""
+    property bool providerRefreshInProgress: false
+    property string _providerRefreshBaseline: ""
+    property int _providerRefreshPollsRemaining: 0
 
     ListModel {
         id: providerModel
@@ -75,6 +80,22 @@ KCM.SimpleKCM {
     function toFileUrl(absPath) {
         if (absPath.indexOf("file://") === 0) return absPath;
         return "file://" + absPath;
+    }
+
+    function shellQuote(value) {
+        return "'" + String(value).replace(/'/g, "'\"'\"'") + "'";
+    }
+
+    function requestProviderRefresh() {
+        if (providerRefreshInProgress) return;
+        providerRefreshInProgress = true;
+        providerReadError = "";
+        _providerRefreshBaseline = providerGeneratedAt;
+        _providerRefreshPollsRemaining = 60;
+        var helper = _homeDir + "/.local/bin/neon-codexbar";
+        var command = shellQuote(helper) + " refresh --json --snapshot-path "
+            + shellQuote(resolvedSnapshotPath());
+        providerRefreshCommand.connectSource(command);
     }
 
     function splitIds(value) {
@@ -125,6 +146,7 @@ KCM.SimpleKCM {
             try {
                 var parsed = JSON.parse(text);
                 var cards = Array.isArray(parsed.cards) ? parsed.cards : [];
+                providerGeneratedAt = parsed.generated_at || "";
                 rebuildProviderModel(cards);
             } catch (e) {
                 rebuildProviderModel([]);
@@ -240,6 +262,46 @@ KCM.SimpleKCM {
         syncFromProviderModel();
     }
 
+    Plasma5Support.DataSource {
+        id: providerRefreshCommand
+        engine: "executable"
+        connectedSources: []
+
+        onNewData: {
+            var exitCode = data["exit code"];
+            disconnectSource(sourceName);
+            if (exitCode !== 0) {
+                root.providerRefreshInProgress = false;
+                root.providerReadError = data["stderr"] || i18n("Refresh helper failed.");
+                return;
+            }
+            providerRefreshPollTimer.start();
+        }
+    }
+
+    Timer {
+        id: providerRefreshPollTimer
+        interval: 1000
+        repeat: true
+        onTriggered: {
+            if (root.providerGeneratedAt
+                    && root.providerGeneratedAt !== root._providerRefreshBaseline) {
+                stop();
+                root.providerRefreshInProgress = false;
+                root.providerReadError = "";
+                return;
+            }
+            if (root._providerRefreshPollsRemaining <= 0) {
+                stop();
+                root.providerRefreshInProgress = false;
+                root.providerReadError = i18n("Daemon did not publish a fresh snapshot.");
+                return;
+            }
+            root._providerRefreshPollsRemaining -= 1;
+            root.loadProviders();
+        }
+    }
+
     Kirigami.FormLayout {
         Layout.fillWidth: true
 
@@ -305,9 +367,9 @@ KCM.SimpleKCM {
             model: [
                 {"text": i18n("Percent in ring"), "value": "percent-ring"},
                 {"text": i18n("Percent only"), "value": "percent-only"},
-                {"text": i18n("5h / 7d bars"), "value": "two-bars"},
-                {"text": i18n("5h / 7d circles"), "value": "two-circles"},
-                {"text": i18n("5h / 7d tiles"), "value": "two-tiles"}
+                {"text": i18n("Provider window bars"), "value": "two-bars"},
+                {"text": i18n("Provider window circles"), "value": "two-circles"},
+                {"text": i18n("Provider window tiles"), "value": "two-tiles"}
             ]
             onActivated: cfg_trayIconStyle = currentValue
         }
@@ -321,8 +383,8 @@ KCM.SimpleKCM {
             valueRole: "value"
             model: [
                 {"text": i18n("Highest usage"), "value": "highest"},
-                {"text": i18n("5-hour window"), "value": "primary"},
-                {"text": i18n("7-day window"), "value": "secondary"}
+                {"text": i18n("First provider window"), "value": "primary"},
+                {"text": i18n("Second provider window"), "value": "secondary"}
             ]
             onActivated: cfg_traySingleWindow = currentValue
         }
@@ -445,9 +507,10 @@ KCM.SimpleKCM {
             }
 
             QQC2.Button {
-                text: i18n("Reload providers")
+                text: providerRefreshInProgress ? i18n("Refreshing…") : i18n("Refresh providers")
                 icon.name: "view-refresh"
-                onClicked: loadProviders()
+                enabled: !providerRefreshInProgress
+                onClicked: requestProviderRefresh()
             }
         }
     }

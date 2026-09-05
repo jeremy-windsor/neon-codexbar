@@ -173,18 +173,21 @@ info "Installing Python package from ${REPO_ROOT}"
 # clean form first, then fall back to --break-system-packages for the user-site
 # install. Power users on a venv won't hit this branch.
 PIP_FLAGS=("install" "--user")
-if ! "${PIP_BIN}" "${PIP_FLAGS[@]}" "${REPO_ROOT}" 2>/tmp/neon-codexbar-pip.log; then
-  if grep -q "externally-managed-environment" /tmp/neon-codexbar-pip.log 2>/dev/null; then
+PIP_LOG="$(mktemp "${TMPDIR:-/tmp}/neon-codexbar-pip.XXXXXXXX.log")"
+trap 'rm -f -- "${PIP_LOG}"' EXIT
+if ! "${PIP_BIN}" "${PIP_FLAGS[@]}" "${REPO_ROOT}" 2>"${PIP_LOG}"; then
+  if grep -q "externally-managed-environment" "${PIP_LOG}" 2>/dev/null; then
     info "Detected PEP-668 environment; retrying with --break-system-packages (user-site only)"
     PIP_FLAGS+=("--break-system-packages")
     "${PIP_BIN}" "${PIP_FLAGS[@]}" "${REPO_ROOT}" \
-      || { cat /tmp/neon-codexbar-pip.log >&2; die "pip install failed even with --break-system-packages."; }
+      || { cat "${PIP_LOG}" >&2; die "pip install failed even with --break-system-packages."; }
   else
-    cat /tmp/neon-codexbar-pip.log >&2
+    cat "${PIP_LOG}" >&2
     die "pip install --user failed. Check pip output above."
   fi
 fi
-rm -f /tmp/neon-codexbar-pip.log
+rm -f -- "${PIP_LOG}"
+trap - EXIT
 
 info "Python package installed"
 
@@ -243,10 +246,12 @@ install -m 0644 "${UNIT_SRC}" "${UNIT_DEST}" \
 systemctl --user daemon-reload \
   || die "systemctl --user daemon-reload failed"
 
-# enable --now is idempotent: enabling an already-enabled unit is a no-op,
-# starting an already-running unit is a no-op.
-systemctl --user enable --now neon-codexbar.service \
-  || die "systemctl --user enable --now neon-codexbar.service failed. Run 'systemctl --user status neon-codexbar.service' and 'journalctl --user -u neon-codexbar.service' for details."
+# Enable first, then restart so upgrades replace the daemon's in-memory code.
+systemctl --user enable neon-codexbar.service \
+  || die "systemctl --user enable neon-codexbar.service failed"
+
+systemctl --user restart neon-codexbar.service \
+  || die "systemctl --user restart neon-codexbar.service failed. Run 'systemctl --user status neon-codexbar.service' and 'journalctl --user -u neon-codexbar.service' for details."
 
 info "Daemon enabled and started"
 

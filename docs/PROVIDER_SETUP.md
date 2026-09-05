@@ -45,23 +45,26 @@ codexbar config dump --format json | jq '.providers[] | select(.enabled==true)'
 
 ## Linux source policy
 
-neon-codexbar refuses `--source auto` on Linux (it picks unreliable defaults).
-The adapter pins the source per provider:
+neon-codexbar pins a validated source per provider. It refuses `--source auto`
+unless the provider is explicitly approved for it in the policy:
 
 | Provider | Source | Notes |
 |---|---|---|
-| `codex` | `cli` | uses `~/.codex` auth |
-| `claude` | `cli` | uses `~/.claude` auth; **slow (~15s/call)** |
+| `codex` | `oauth` | uses `~/.codex` auth without launching Codex RPC |
+| `claude` | `oauth` | uses Claude Code OAuth auth; avoids Claude CLI probe sessions |
 | `zai` | `api` | requires `Z_AI_API_KEY` env var |
 | `openrouter` | `api` | requires `OPENROUTER_API_KEY` env var |
+| `grok` | `auto` | lets the Grok CLI refresh OAuth, then falls back to token-authenticated web billing |
 
 Unknown providers are skipped with a diagnostic. To add a provider, extend
 `src/neon_codexbar/adapter/source_policy.py` and capture a fixture from
 `codexbar usage --provider <id> --source <type> --format json`.
 
-CodexBar `v0.25.1` was the latest release checked for this document. The Linux
-standalone CLI in that release fixes `codexbar --version` by packaging its
-`VERSION` file.
+Provider cards show a short recovery instruction instead of raw upstream error
+text. The original provider message remains available under **Show debug**.
+
+CodexBar `v0.50.0` is the latest locally validated release for this document.
+The Linux standalone CLI has reported its packaged version since `v0.25.1`.
 
 ## CodexBar v0.25+ provider inventory
 
@@ -105,27 +108,42 @@ New CodexBar CLI features worth future neon-codexbar work:
 ### codex
 
 ```bash
-codexbar usage --provider codex --source cli --format json --pretty
+codexbar usage --provider codex --source oauth --format json --pretty
 ```
 
-Auth is whatever `codex` CLI is logged in as. Returns 2 quota windows (5h /
-1wk) and a credits meter. Reset descriptions use U+202F NARROW NO-BREAK SPACE
+Auth is whatever `codex` CLI is logged in as. If setup or token refresh fails,
+run `codex login`, then refresh the widget. The OAuth source reads the same
+local auth state directly and avoids launching `codex app-server` for every
+poll. Returns the quota windows the account currently exposes plus a credits
+meter when available. Reset descriptions use U+202F NARROW NO-BREAK SPACE
 between time and AM/PM — render as a regular space.
 
 ### claude
 
 ```bash
-codexbar usage --provider claude --source cli --format json --pretty
+codexbar usage --provider claude --source oauth --format json --pretty
 ```
 
-Auth is whatever `claude` CLI is logged in as (`~/.claude/`). Returns 2 quota
-windows (5h / 1wk).
+Auth is Claude Code OAuth state. Returns the standard quota windows plus any
+Claude-specific extra windows CodexBar exposes.
 
-- Slow: a single fetch hits claude.ai and takes ~15 seconds.
-- The `primary` window is sometimes returned with only `usedPercent` and
-  `windowMinutes` — no `resetsAt`, no `resetDescription`. Display layer must
-  tolerate.
-- Identity is bare (only `providerID`). No email surfaced.
+- Fast on Linux: live validation on Jeremy's laptop returned in about 2 seconds.
+- Avoids the old CLI probe path that created empty Claude Code recents.
+- The old `cli` source still works, but it launches the Claude CLI probe and is
+  intentionally not used by neon-codexbar.
+
+### grok
+
+```bash
+codexbar usage --provider grok --source auto --format json --pretty
+```
+
+Grok OAuth access tokens can expire after six hours even while a refresh token
+remains available. CodexBar does not refresh that credential itself. Its Grok
+`auto` source first launches the installed Grok CLI, which refreshes the token,
+then falls back to the token-authenticated billing endpoint when the CLI's ACP
+`x.ai/billing` method is unavailable. Pinning Grok to `web` skips the refresh;
+pinning it to `cli` fails when that ACP billing method returns `Method not found`.
 
 ### zai
 
