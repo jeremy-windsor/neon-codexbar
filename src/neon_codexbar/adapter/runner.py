@@ -19,6 +19,7 @@ from neon_codexbar.models import CommandResult
 # 30s when their plugin/session startup is cold. Keep enough headroom that a
 # slow valid fetch does not become a false provider outage.
 DEFAULT_TIMEOUT_SECONDS = 60.0
+CLAUDE_REFRESH_COOLDOWN_SECONDS = 30 * 60
 
 
 def _provider_error_message(raw_json: str) -> str | None:
@@ -68,6 +69,7 @@ class CodexBarRunner:
         self.config = config or AppConfig()
         self.codexbar_path = codexbar_path or self.config.codexbar_path
         self.timeout_seconds = timeout_seconds
+        self._claude_refresh_after = 0.0
 
     def locate(self) -> str | None:
         """Locate CodexBar from explicit config/env, PATH, or common local paths."""
@@ -228,6 +230,28 @@ class CodexBarRunner:
                 duration_seconds=0.0,
                 error=message,
             )
+        result = self._fetch_provider(provider_id, source)
+        if (
+            provider_id == "claude"
+            and source == "oauth"
+            and not result.ok
+            and "claude oauth token expired" in (result.error or result.stderr).lower()
+            and time.monotonic() >= self._claude_refresh_after
+        ):
+            # Let Claude own token rotation; never rewrite its credentials ourselves.
+            # Bound failed recovery attempts across daemon ticks as well as within one fetch.
+            self._claude_refresh_after = time.monotonic() + CLAUDE_REFRESH_COOLDOWN_SECONDS
+            probe = self._fetch_provider("claude", "cli")
+            if not probe.ok:
+                detail = probe.error or probe.stderr.strip() or f"exit {probe.exit_code}"
+                original = result.error or result.stderr.strip()
+                return replace(result, error=f"{original} Claude CLI recovery failed: {detail}")
+            result = self._fetch_provider("claude", "oauth")
+        return result
+
+    def _fetch_provider(self, provider_id: str, source: str) -> CommandResult:
+        """Run a single bounded usage fetch without automatic recovery."""
+
         result = self.run(
             [
                 "--provider",

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
+import pytest
+
 from neon_codexbar.adapter.discovery import discover
 from neon_codexbar.adapter.runner import DEFAULT_TIMEOUT_SECONDS, CodexBarRunner
 from neon_codexbar.models import CommandResult
@@ -193,3 +195,70 @@ def test_fetch_provider_surfaces_json_error_from_stdout() -> None:
 
 def test_default_timeout_has_headroom_for_slow_provider_cli_fetches() -> None:
     assert DEFAULT_TIMEOUT_SECONDS >= 60.0
+
+
+class RecoveryRunner(CodexBarRunner):
+    def __init__(self, results: list[CommandResult]) -> None:
+        super().__init__()
+        self.results = iter(results)
+        self.sources: list[str] = []
+
+    def run(
+        self,
+        args: Sequence[str],
+        *,
+        timeout_seconds: float | None = None,
+    ) -> CommandResult:
+        self.sources.append(args[args.index("--source") + 1])
+        return next(self.results)
+
+
+def _expired() -> CommandResult:
+    return _result([], '[{"error":{"message":"Claude OAuth token expired. Run claude."}}]', 1)
+
+
+def test_claude_expiry_recovers_then_retries_oauth() -> None:
+    success = _result([], '[{"usage":{"primary":{"usedPercent":45}}}]')
+    runner = RecoveryRunner([_expired(), success, success])
+    assert runner.fetch_provider("claude", "oauth") is success
+    assert runner.sources == ["oauth", "cli", "oauth"]
+
+
+def test_claude_failed_probe_backs_off_then_can_recover(monkeypatch: pytest.MonkeyPatch) -> None:
+    from neon_codexbar.adapter import runner as runner_module
+
+    now = [100.0]
+    monkeypatch.setattr(runner_module.time, "monotonic", lambda: now[0])
+    failure = _result([], "", 124, error="CodexBar command timed out after 60s.")
+    success = _result([], "[]")
+    runner = RecoveryRunner([_expired(), failure, _expired(), _expired(), success, success])
+    result = runner.fetch_provider("claude", "oauth")
+    assert "recovery failed" in result.error
+    assert "timed out" in result.error
+    runner.fetch_provider("claude", "oauth")
+    assert runner.sources == ["oauth", "cli", "oauth"]
+    now[0] += runner_module.CLAUDE_REFRESH_COOLDOWN_SECONDS
+    assert runner.fetch_provider("claude", "oauth") is success
+    assert runner.sources == ["oauth", "cli", "oauth", "oauth", "cli", "oauth"]
+
+
+def test_claude_retry_does_not_recurse() -> None:
+    runner = RecoveryRunner([_expired(), _result([], "[]"), _expired()])
+    result = runner.fetch_provider("claude", "oauth")
+    assert not result.ok
+    assert "token expired" in result.error
+    assert runner.sources == ["oauth", "cli", "oauth"]
+
+
+def test_recovery_ignores_healthy_unrelated_and_other_provider_results() -> None:
+    cases = [
+        ("claude", "oauth", _result([], "[]")),
+        ("claude", "oauth", _result([], "", 1, error="HTTP 429 rate limited")),
+        ("claude", "oauth", _result([], "", 1, error="Missing credentials")),
+        ("codex", "oauth", _expired()),
+        ("claude", "cli", _expired()),
+    ]
+    for provider, source, response in cases:
+        runner = RecoveryRunner([response])
+        runner.fetch_provider(provider, source)
+        assert runner.sources == [source]
